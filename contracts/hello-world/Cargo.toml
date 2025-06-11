@@ -10,14 +10,6 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-ark-bn254 = { version = "0.4.0", default-features = false, features = ["curve"] }
-ark-ec = { version = "0.4.0", default-features = false }
-ark-ff = { version = "0.4.0", default-features = false }
-ark-groth16 = { version = "0.4.0", default-features = false }
-ark-std = { version = "0.4.0", default-features = false }
-serde = { version = "1.0", features = ["derive"], default-features = false }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-hex = "0.4"
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
