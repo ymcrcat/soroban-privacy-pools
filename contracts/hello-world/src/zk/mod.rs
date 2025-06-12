@@ -62,3 +62,6 @@ impl Groth16Verifier {
         Ok(bls.pairing_check(vp1, vp2))
     }
 }
+
+#[cfg(test)]
+mod test;
