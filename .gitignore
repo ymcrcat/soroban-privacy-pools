@@ -1,6 +1,8 @@
 # Rust's output directory
 target
 test_snapshots
+# circuits build
+circuits/build
 # Local settings
 .soroban
 .stellar
