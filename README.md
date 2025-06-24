@@ -5,11 +5,12 @@
 This repository uses the recommended structure for a Soroban project:
 ```text
 .
+├── circuits
 ├── contracts
 │   └── privacy_pools
 │       ├── src
-|		|	├── circom2soroban
 |		|	├── zk
+|       |   |   └── mod.rs
 │       │   ├── lib.rs
 │       │   └── test.rs
 │       └── Cargo.toml
