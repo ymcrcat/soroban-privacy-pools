@@ -8,7 +8,7 @@ This repository uses the recommended structure for a Soroban project:
 ├── contracts
 │   └── privacy_pools
 │       ├── src
-|		|	├── circom2rust
+|		|	├── circom2soroban
 |		|	├── zk
 │       │   ├── lib.rs
 │       │   └── test.rs
@@ -18,5 +18,4 @@ This repository uses the recommended structure for a Soroban project:
 ```
 
 - New Soroban contracts can be put in `contracts`, each in their own directory. There is already a `privacy_pools` contract.
-- If you initialized this project with any other example contracts via `--with-example`, those contracts will be in the `contracts` directory as well.
 - Contracts should have their own `Cargo.toml` files that rely on the top-level `Cargo.toml` workspace for their dependencies.
