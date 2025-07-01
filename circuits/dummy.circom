@@ -1,7 +1,6 @@
 pragma circom 2.2.0;
 
 include "commitment.circom";
-include "poseidon.circom";
 include "comparators.circom";
 
 // This circuit is for withdrawing by demonstrating only that the withdrawer
