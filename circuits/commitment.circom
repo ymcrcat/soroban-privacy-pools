@@ -1,6 +1,6 @@
 pragma circom 2.2.0;
 
-include "poseidon.circom";
+include "keccak256.circom";
 
 template CommitmentHasher() {
     
@@ -14,16 +14,16 @@ template CommitmentHasher() {
     signal output commitment;
     signal output nullifierHash;
 
-    component nullifierHasher = Poseidon(1);
-    nullifierHasher.inputs[0] <== nullifier;
+    component nullifierHasher = Keccak256FieldHash1();
+    nullifierHasher.in <== nullifier;
     
-    component precommitmentHasher = Poseidon(2);
-    precommitmentHasher.inputs[0] <== nullifier;
-    precommitmentHasher.inputs[1] <== secret;
+    component precommitmentHasher = Keccak256FieldHash();
+    precommitmentHasher.in[0] <== nullifier;
+    precommitmentHasher.in[1] <== secret;
 
-    component commitmentHasher = Poseidon(2);
-    commitmentHasher.inputs[0] <== value;
-    commitmentHasher.inputs[1] <== precommitmentHasher.out;
+    component commitmentHasher = Keccak256FieldHash();
+    commitmentHasher.in[0] <== value;
+    commitmentHasher.in[1] <== precommitmentHasher.out;
 
     commitment <== commitmentHasher.out;
     nullifierHash <== nullifierHasher.out;
