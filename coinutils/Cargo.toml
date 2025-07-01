@@ -1,0 +1,12 @@
+[package]
+name = "coinutils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ark-ff = "0.4"
+ark-bls12-381 = "0.4"
+ark-sponge = "0.4.0-alpha"
+rand = "0.8"
+sha3 = "0.10"
+hex = "0.4"
