@@ -10,15 +10,17 @@ include "comparators.circom";
 
 template Dummy() {
     signal input withdrawnValue;
-    signal input label;
-    signal input existingValue;
-    signal input existingNullifier;
-    signal input existingSecret;
-    signal input newNullifier;
-    signal input newSecret;
+    signal input label;                 // keccak256(scope, nonce) % SNARK_SCALAR_FIELD
+    signal input existingValue;         // value of the existing commitment
+    signal input existingNullifier;     // nullifier of the existing commitment
+    signal input existingSecret;        // Secret of the existing commitment
+    signal input newNullifier;          // nullifier of the new commitment
+    signal input newSecret;             // secret of the new commitment
 
-    signal output existingNullifierHash;
-    signal output newCommitmentHash;
+    signal output existingNullifierHash;    // hash of existing commitment nullifier
+    signal output newCommitmentHash;        // hash of new commitment
+
+    // IMPLEMENTATION
 
     component commitmentHasher = CommitmentHasher();
     commitmentHasher.value <== withdrawnValue;
