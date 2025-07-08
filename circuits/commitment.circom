@@ -17,13 +17,14 @@ template CommitmentHasher() {
     component nullifierHasher = Keccak256FieldHash1();
     nullifierHasher.in <== nullifier;
     
-    component precommitmentHasher = Keccak256FieldHash();
+    component precommitmentHasher = Keccak256FieldHash2();
     precommitmentHasher.in[0] <== nullifier;
     precommitmentHasher.in[1] <== secret;
 
-    component commitmentHasher = Keccak256FieldHash();
+    component commitmentHasher = Keccak256FieldHash3();
     commitmentHasher.in[0] <== value;
-    commitmentHasher.in[1] <== precommitmentHasher.out;
+    commitmentHasher.in[1] <== label;
+    commitmentHasher.in[2] <== precommitmentHasher.out;
 
     commitment <== commitmentHasher.out;
     nullifierHash <== nullifierHasher.out;
