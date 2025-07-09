@@ -12,12 +12,18 @@ const COIN_VALUE: i128 = 1000000000; // 1 XLM in stroops
 
 #[derive(Serialize)]
 struct SnarkInput {
+    #[serde(rename = "withdrawnValue")]
     withdrawn_value: String,
     label: String,
+    #[serde(rename = "existingValue")]
     existing_value: String,
+    #[serde(rename = "existingNullifier")]
     existing_nullifier: String,
+    #[serde(rename = "existingSecret")]
     existing_secret: String,
+    #[serde(rename = "newNullifier")]
     new_nullifier: String,
+    #[serde(rename = "newSecret")]
     new_secret: String,
 }
 
