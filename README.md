@@ -36,8 +36,8 @@ A privacy-preserving transaction system built on Stellar using Soroban smart con
 ├── circom2soroban/              # Utility for converting circom artifacts
 │   ├── src/main.rs              # Converts VK/proofs/public to Soroban format
 │   └── Cargo.toml
-├── coinutils/                   # Utility functions and helpers
-│   ├── src/main.rs
+├── coinutils/                   # Coin generation and management utility
+│   ├── src/main.rs              # CLI for generating coins and withdrawal inputs
 │   └── Cargo.toml
 ├── Cargo.toml                   # Workspace configuration
 ├── Makefile                     # Circuit compilation commands
@@ -157,6 +157,61 @@ cargo run --bin circom2soroban proof proof.json
 cargo run --bin circom2soroban public public.json
 ```
 
+### coinutils Tool
+
+The `coinutils` utility helps generate and manage privacy pool coins with proper cryptographic commitments:
+
+```bash
+# Generate a new coin for a privacy pool
+cargo run --bin coinutils generate <scope> [output_file]
+
+# Create withdrawal inputs from an existing coin
+cargo run --bin coinutils withdraw <coin_file> [scope] [output_file]
+```
+
+**Features:**
+- **Coin Generation**: Creates new coins with random nullifiers and secrets
+- **Commitment Calculation**: Implements the same commitment scheme as the circuits
+- **Withdrawal Preparation**: Generates circuit inputs for withdrawal proofs
+- **BLS12-381 Field Operations**: Uses arkworks for proper field arithmetic
+- **Keccak256 Hashing**: Matches the circuit's hash implementation
+
+**Examples:**
+```bash
+# Generate a coin for "my_pool" scope
+cargo run --bin coinutils generate my_pool coin.json
+
+# Create withdrawal from existing coin
+cargo run --bin coinutils withdraw coin.json my_pool withdrawal.json
+```
+
+**Generated Coin Structure:**
+```json
+{
+  "coin": {
+    "value": "1000000000",          // 1 XLM in stroops
+    "nullifier": "12345...",        // Random field element
+    "secret": "67890...",           // Random field element 
+    "label": "24680...",            // keccak256(scope, nonce) % p
+    "commitment": "13579..."
+  },
+  "commitment_hex": "0xabcd..."
+}
+```
+
+**Withdrawal Input Structure:**
+```json
+{
+  "withdrawnValue": "1000000000",
+  "label": "24680...",
+  "existingValue": "1000000000",
+  "existingNullifier": "12345...",
+  "existingSecret": "67890...",
+  "newNullifier": "98765...",
+  "newSecret": "43210..."
+}
+```
+
 ### circom2soroban Tool
 
 The `circom2soroban` utility converts snarkjs artifacts to Soroban-compatible format:
@@ -190,10 +245,36 @@ let output = Vec::from_array(&env, [Fr::from_u256(public_0), Fr::from_u256(publi
 1. **Modify circuits** in `circuits/` directory
 2. **Recompile circuits** using `make .circuits`
 3. **Regenerate trusted setup** if circuit structure changed
-4. **Generate new proofs** with test inputs
-5. **Convert artifacts** using `circom2soroban`
-6. **Update tests** with new verification keys/proofs/public outputs
-7. **Run tests** to verify everything works
+4. **Generate test coins** using `coinutils generate`
+5. **Create withdrawal inputs** using `coinutils withdraw`
+6. **Generate new proofs** with circuit inputs
+7. **Convert artifacts** using `circom2soroban`
+8. **Update tests** with new verification keys/proofs/public outputs
+9. **Run tests** to verify everything works
+
+### Complete Example Workflow
+
+```bash
+# 1. Generate a test coin
+cargo run --bin coinutils generate test_pool_scope test_coin.json
+
+# 2. Create withdrawal input from the coin
+cargo run --bin coinutils withdraw test_coin.json test_pool_scope withdrawal_input.json
+
+# 3. Generate witness and proof
+cd circuits
+node build/dummy_js/generate_witness.js build/dummy_js/dummy.wasm ../withdrawal_input.json witness.wtns
+snarkjs groth16 prove output/dummy_final.zkey witness.wtns proof.json public.json
+
+# 4. Convert for Soroban
+cd ..
+cargo run --bin circom2soroban vk circuits/output/dummy_verification_key.json
+cargo run --bin circom2soroban proof circuits/proof.json
+cargo run --bin circom2soroban public circuits/public.json
+
+# 5. Update test with new values and run
+cargo test test_coin_ownership
+```
 
 ## Testing
 
