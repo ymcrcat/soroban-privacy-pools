@@ -4,6 +4,8 @@ test_snapshots
 # circuits build
 circuits/build
 circuits/output
+circuits/input
 # Local settings
 .soroban
 .stellar
+.vscode
