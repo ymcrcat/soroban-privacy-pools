@@ -54,7 +54,14 @@ fn field_hash(inputs: &[Fr]) -> Fr {
         hasher.update(&to_bytesn32(input));
     }
     let hashed = hasher.finalize();
-    Fr::from_be_bytes_mod_order(&hashed)
+    
+    // Truncate 256-bit hash to 254 bits to match Circom circuit
+    let mut truncated_hash = [0u8; 32];
+    truncated_hash.copy_from_slice(&hashed);
+    // Clear the highest 2 bits to ensure we stay within 254 bits
+    truncated_hash[31] &= 0x3F; // Keep only 6 bits instead of 8
+    
+    Fr::from_be_bytes_mod_order(&truncated_hash)
 }
 
 fn to_bytesn32(fr: &Fr) -> [u8; 32] {
@@ -70,7 +77,17 @@ fn generate_label(scope: &[u8], nonce: &[u8; 32]) -> Fr {
     hasher.update(scope);
     hasher.update(nonce);
     let hashed = hasher.finalize();
-    Fr::from_be_bytes_mod_order(&hashed)
+    
+    // Truncate 256-bit hash to 254 bits to match Circom circuit
+    // The circuit uses Num2Bits(254) and truncates hash output to 254 bits
+    let mut truncated_hash = [0u8; 32];
+    truncated_hash.copy_from_slice(&hashed);
+    // Clear the highest 2 bits (256 - 254 = 2 bits)
+    // Set the highest 2 bits to 0 to ensure we stay within 254 bits
+    truncated_hash[31] &= 0x3F; // Keep only 6 bits instead of 8
+    
+    // Convert 254-bit hash to field element
+    Fr::from_be_bytes_mod_order(&truncated_hash)
 }
 
 fn generate_commitment(value: Fr, label: Fr, nullifier: Fr, secret: Fr) -> Fr {
