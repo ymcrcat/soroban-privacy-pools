@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use std::fs;
 use clap::Parser;
+use num_bigint::BigUint;
+use num_traits::Num;
 
 #[derive(Parser)]
 struct Args {
@@ -28,6 +30,9 @@ struct ProofJson {
     #[serde(rename = "curve")]
     _curve: String
 }
+
+// Remove the old PublicOutputJson struct and replace with type alias
+type PublicOutputJson = Vec<String>;
 
 fn print_vk(json_str: &String)
 {
@@ -73,6 +78,36 @@ fn print_proof(json_str: &String) {
     println!("let pi_cy = \"{}\";", proof.pi_c[1]);
 }
 
+fn print_public_output(json_str: &String) {
+    let public_output: PublicOutputJson = serde_json::from_str(json_str).expect("Invalid JSON");
+
+    println!("// Public output signals:");
+    for (i, signal) in public_output.iter().enumerate() {
+        // Parse decimal string to BigUint
+        let value = BigUint::from_str_radix(signal, 10).unwrap();
+        let mut bytes = value.to_bytes_be();
+        // Pad to 32 bytes
+        if bytes.len() < 32 {
+            let mut padded = vec![0u8; 32 - bytes.len()];
+            padded.extend_from_slice(&bytes);
+            bytes = padded;
+        }
+        // Format as hex for Rust array
+        let bytes_str = bytes.iter().map(|b| format!("0x{:02x}", b)).collect::<Vec<_>>().join(", ");
+        println!("let public_{} = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[{}]));", i, bytes_str);
+    }
+    
+    println!("\n// Create output vector for verification:");
+    print!("let output = Vec::from_array(&env, [");
+    for (i, _) in public_output.iter().enumerate() {
+        if i > 0 {
+            print!(", ");
+        }
+        print!("Fr::from_u256(public_{})", i);
+    }
+    println!("]);");
+}
+
 fn main() {
     let args = Args::parse();
     let json_str = fs::read_to_string(&args.filename).expect("Failed to read file");
@@ -83,5 +118,9 @@ fn main() {
 
     if args.filetype == "proof" {
         print_proof(&json_str);
+    }
+
+    if args.filetype == "public" {
+        print_public_output(&json_str);
     }
 }
