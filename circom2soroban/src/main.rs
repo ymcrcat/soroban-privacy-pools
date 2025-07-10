@@ -61,6 +61,9 @@ fn print_vk(json_str: &String)
     println!("\n");
     println!("let ic1x = \"{}\";", vk.ic[1][0]);
     println!("let ic1y = \"{}\";", vk.ic[1][1]);
+    println!("\n");
+    println!("let ic2x = \"{}\";", vk.ic[2][0]);
+    println!("let ic2y = \"{}\";", vk.ic[2][1]);
 }
 
 fn print_proof(json_str: &String) {
