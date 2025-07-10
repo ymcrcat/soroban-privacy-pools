@@ -189,10 +189,10 @@ cargo run --bin coinutils withdraw coin.json my_pool withdrawal.json
 ```json
 {
   "coin": {
-    "value": "1000000000",          // 1 XLM in stroops
-    "nullifier": "12345...",        // Random field element
-    "secret": "67890...",           // Random field element 
-    "label": "24680...",            // keccak256(scope, nonce) % p
+    "value": "1000000000",         
+    "nullifier": "12345...",     
+    "secret": "67890...",       
+    "label": "24680...",       
     "commitment": "13579..."
   },
   "commitment_hex": "0xabcd..."
