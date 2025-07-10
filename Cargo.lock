@@ -349,6 +349,7 @@ dependencies = [
  "clap",
  "hex",
  "num-bigint",
+ "num-traits",
  "serde",
  "serde_json",
  "soroban-sdk",
