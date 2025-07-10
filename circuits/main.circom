@@ -27,8 +27,8 @@ template Withdraw(maxTreeDepth) {
     signal input stateIndex;                     // indices for the state tree
 
     // OUTPUT SIGNALS
-    signal output newCommitmentHash;    // hash of new commitment
-    signal output existingNullifierHash; // hash of existing commitment nullifier
+    signal output newCommitmentHash;        // hash of new commitment
+    signal output existingNullifierHash;    // hash of existing commitment nullifier
 
     // IMPLEMENTATION
 
