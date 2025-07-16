@@ -8,7 +8,7 @@ use soroban_sdk::{
     Env, Vec, U256, Bytes
 };
 
-use crate::zk::{Groth16Verifier, Groth16VerifierClient, Proof, VerificationKey};
+use crate::zk::{Groth16Verifier, Proof, VerificationKey};
 
 fn g1_from_coords(env: &Env, x: &str, y: &str) -> G1Affine {
     let ark_g1 = ark_bls12_381::G1Affine::new(Fq::from_str(x).unwrap(), Fq::from_str(y).unwrap());
@@ -24,10 +24,6 @@ fn g2_from_coords(env: &Env, x1: &str, x2: &str, y1: &str, y2: &str) -> G2Affine
     let mut buf = [0u8; G2_SERIALIZED_SIZE];
     ark_g2.serialize_uncompressed(&mut buf[..]).unwrap();
     G2Affine::from_array(env, &buf)
-}
-
-fn create_client(e: &Env) -> Groth16VerifierClient {
-    Groth16VerifierClient::new(e, &e.register(Groth16Verifier {}, ()))
 }
 
 #[test]
@@ -94,12 +90,9 @@ fn test_with_hardcoded_vk() {
         c: g1_from_coords(&env, &pi_cx, &pi_cy),
     };
 
-    // Create the contract client
-    let client = create_client(&env);
-
     // Test Case 1: Verify the proof with the correct public output (33, copied from `data/public.json`)
     let output = Vec::from_array(&env, [Fr::from_u256(U256::from_u32(&env, 33))]);
-    let res = client.verify_proof(&vk, &proof, &output);
+    let res = Groth16Verifier::verify_proof(env.clone(), vk.clone(), proof.clone(), output).unwrap();
     assert_eq!(res, true);
 
     // Print out the budget report showing CPU and memory cost breakdown for
@@ -133,7 +126,7 @@ fn test_with_hardcoded_vk() {
 
     // Test Case 2: Verify the proof with an incorrect public output (22)
     let output = Vec::from_array(&env, [Fr::from_u256(U256::from_u32(&env, 22))]);
-    let res = client.verify_proof(&vk, &proof, &output);
+    let res = Groth16Verifier::verify_proof(env.clone(), vk, proof, output).unwrap();
     assert_eq!(res, false);
 }
 
@@ -192,9 +185,7 @@ fn test_with_circom2soroban_output() {
         c: g1_from_coords(&env, &pi_cx, &pi_cy),
     };
 
-    let client = create_client(&env);
-    let output = Vec::from_array(&env, [Fr::from_u256(U256::from_u32(&env, 0))]);
-    let res = client.verify_proof(&vk, &proof, &output);
+    let res = Groth16Verifier::verify_proof(env.clone(), vk, proof, Vec::from_array(&env, [Fr::from_u256(U256::from_u32(&env, 0))])).unwrap();
     assert_eq!(res, false); // Should be false for dummy proof/key
 }
 
@@ -275,7 +266,6 @@ fn test_coin_ownership() {
     // Create output vector for verification:
     let output = Vec::from_array(&env, [Fr::from_u256(public_0), Fr::from_u256(public_1)]);
     
-    let client = create_client(&env);
-    let res = client.verify_proof(&vk, &proof, &output);
+    let res = Groth16Verifier::verify_proof(env.clone(), vk, proof, output).unwrap();
     assert_eq!(res, true);
 }

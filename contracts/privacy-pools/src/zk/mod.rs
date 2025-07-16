@@ -1,5 +1,5 @@
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype,
+    contracterror,
     crypto::bls12_381::{Fr, G1Affine, G2Affine},
     vec, Env, Vec,
 };
@@ -12,7 +12,6 @@ pub enum Groth16Error {
 }
 
 #[derive(Clone)]
-#[contracttype]
 pub struct VerificationKey {
     pub alpha: G1Affine,
     pub beta: G2Affine,
@@ -22,17 +21,14 @@ pub struct VerificationKey {
 }
 
 #[derive(Clone)]
-#[contracttype]
 pub struct Proof {
     pub a: G1Affine,
     pub b: G2Affine,
     pub c: G1Affine,
 }
 
-#[contract]
 pub struct Groth16Verifier;
 
-#[contractimpl]
 impl Groth16Verifier {
     pub fn verify_proof(
         env: Env,
