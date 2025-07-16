@@ -48,9 +48,7 @@ impl VerificationKey {
             *pos += N;
             arr
         }
-        // G1Affine and G2Affine sizes
-        const G1_SIZE: usize = 48;
-        const G2_SIZE: usize = 96;
+        
         // Deserialize fields
         let alpha = G1Affine::from_array(env, &take::<G1_SERIALIZED_SIZE>(bytes, &mut pos));
         let beta = G2Affine::from_array(env, &take::<G2_SERIALIZED_SIZE>(bytes, &mut pos));
