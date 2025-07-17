@@ -96,6 +96,14 @@ fn init_pub_signals(env: &Env) -> Bytes {
     return pub_signals.to_bytes(env);
 }
 
+fn init_erronous_pub_signals(env: &Env) -> Bytes {
+    let pub_signals = PublicSignals {
+        pub_signals: Vec::from_array(env, [Fr::from_u256(U256::from_u32(env, 34))])
+    };
+
+    return pub_signals.to_bytes(env);
+}
+
 #[test]
 fn test_deposit_and_withdraw() {
     let env = Env::default();
@@ -147,6 +155,51 @@ fn test_deposit_and_withdraw() {
     let nullifiers = client.get_nullifiers();
     assert_eq!(nullifiers.len(), 1);
     assert_eq!(nullifiers.get(0).unwrap(), nullifier);
+}
+
+#[test]
+fn test_deposit_and_withdraw_wrong_proof() {
+    let env = Env::default();
+    let contract_id = env.register(Contract, (init_vk(&env),));
+    
+    // Create test addresses
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    
+    let client = ContractClient::new(&env, &contract_id);
+
+    // Test initial balance
+    assert_eq!(client.get_balance(), 0);
+
+    // Test deposit
+    let commitment = BytesN::from_array(&env, &[1u8; 32]);
+    
+    // Mock authentication for alice
+    env.mock_all_auths();
+    client.deposit(&alice, &commitment);
+    
+    // Check balance after deposit
+    assert_eq!(client.get_balance(), FIXED_AMOUNT);
+    // Check commitments
+    let commitments = client.get_commitments();
+    assert_eq!(commitments.len(), 1);
+    assert_eq!(commitments.get(0).unwrap(), commitment);
+
+    // Test withdraw
+    let nullifier = BytesN::from_array(&env, &[2u8; 32]);
+    let proof = init_proof(&env);
+    let pub_signals = init_erronous_pub_signals(&env);
+    
+    // Mock authentication for bob
+    env.mock_all_auths();
+    let result = client.withdraw(&bob, &nullifier, &proof, &pub_signals);
+    assert_eq!(
+        result,
+        vec![
+            &env,
+            String::from_str(&env, "Couldn't verify coin ownership proof")
+        ]
+    );
 }
 
 #[test]

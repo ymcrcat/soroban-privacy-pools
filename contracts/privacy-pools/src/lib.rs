@@ -66,8 +66,6 @@ impl Contract {
         let proof = Proof::from_bytes(env, &proof_bytes);
         let pub_signals = PublicSignals::from_bytes(env, &pub_signals_bytes);
 
-        let _ = Groth16Verifier::verify_proof(env.clone(), vk, proof, pub_signals.pub_signals).unwrap();
-
         // Check if nullifier has been used before
         let mut nullifiers: Vec<BytesN<32>> = env.storage().instance().get(&NULL_KEY)
             .unwrap_or(vec![env]);
@@ -78,6 +76,11 @@ impl Contract {
 
         // In a real implementation, we would verify the zero-knowledge proof here
         // For this example, we'll skip the actual proof verification
+        let res = Groth16Verifier::verify_proof(env.clone(), vk, proof, pub_signals.pub_signals).unwrap();
+        if !res {
+            return vec![env, String::from_str(env, "Couldn't verify coin ownership proof")]
+        }
+
         
         // Add nullifier to used nullifiers
         nullifiers.push_back(nullifier);
