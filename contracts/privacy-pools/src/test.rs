@@ -90,7 +90,7 @@ fn init_proof(env: &Env) -> Bytes {
 
 fn init_pub_signals(env: &Env) -> Bytes {
     let pub_signals = PublicSignals {
-        pub_signals: Vec::from_array(env, [Fr::from_u256(U256::from_u32(&env, 33))])
+        pub_signals: Vec::from_array(env, [Fr::from_u256(U256::from_u32(env, 33))])
     };
     
     return pub_signals.to_bytes(env);
