@@ -14,11 +14,7 @@ template Dummy() {
     signal input existingValue;         // value of the existing commitment
     signal input existingNullifier;     // nullifier of the existing commitment
     signal input existingSecret;        // Secret of the existing commitment
-    signal input newNullifier;          // nullifier of the new commitment
-    signal input newSecret;             // secret of the new commitment
-
     signal output existingNullifierHash;    // hash of existing commitment nullifier
-    signal output newCommitmentHash;        // hash of new commitment
 
     // IMPLEMENTATION
 
@@ -40,23 +36,6 @@ template Dummy() {
     component withdrawnValueRangeCheck = Num2Bits(128);
     withdrawnValueRangeCheck.in <== withdrawnValue;
     _ <== withdrawnValueRangeCheck.out;
-
-    // check existing and new nullifiers are different
-    component nullifierEqualityCheck = IsEqual();
-    nullifierEqualityCheck.in[0] <== existingNullifier;
-    nullifierEqualityCheck.in[1] <== newNullifier;
-    nullifierEqualityCheck.out === 0;
-
-    // compute new commitment
-    component newCommitmentHasher = CommitmentHasher();
-    newCommitmentHasher.label <== label;
-    newCommitmentHasher.value <== remainingValue;
-    newCommitmentHasher.nullifier <== newNullifier;
-    newCommitmentHasher.secret <== newSecret;
-
-    // output new commitment hash
-    newCommitmentHash <== newCommitmentHasher.commitment;
-    _ <== newCommitmentHasher.nullifierHash;
 }
 
 component main = Dummy();

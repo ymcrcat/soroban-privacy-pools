@@ -21,10 +21,6 @@ struct SnarkInput {
     existing_nullifier: String,
     #[serde(rename = "existingSecret")]
     existing_secret: String,
-    #[serde(rename = "newNullifier")]
-    new_nullifier: String,
-    #[serde(rename = "newSecret")]
-    new_secret: String,
 }
 
 #[derive(Serialize, serde::Deserialize)]
@@ -117,26 +113,22 @@ fn generate_coin(scope: &[u8]) -> GeneratedCoin {
     }
 }
 
-fn withdraw_coin(existing_coin: &CoinData, scope: &[u8]) -> (SnarkInput, GeneratedCoin) {
+fn withdraw_coin(existing_coin: &CoinData, scope: &[u8]) -> SnarkInput {
+    
     let existing_value = Fr::from_str(&existing_coin.value).unwrap();
     let existing_nullifier = Fr::from_str(&existing_coin.nullifier).unwrap();
     let existing_secret = Fr::from_str(&existing_coin.secret).unwrap();
     let existing_label = Fr::from_str(&existing_coin.label).unwrap();
-
-    // Generate new coin for the withdrawal
-    let new_coin = generate_coin(scope);
 
     let snark_input = SnarkInput {
         withdrawn_value: COIN_VALUE.to_string(),
         label: existing_label.into_bigint().to_string(),
         existing_value: existing_value.into_bigint().to_string(),
         existing_nullifier: existing_nullifier.into_bigint().to_string(),
-        existing_secret: existing_secret.into_bigint().to_string(),
-        new_nullifier: new_coin.coin.nullifier.clone(),
-        new_secret: new_coin.coin.secret.clone(),
+        existing_secret: existing_secret.into_bigint().to_string()
     };
 
-    (snark_input, new_coin)
+    snark_input
 }
 
 fn print_usage() {
@@ -201,7 +193,7 @@ fn main() {
             let existing_coin: GeneratedCoin = serde_json::from_str(&coin_content)
                 .expect(&format!("Failed to parse coin file: {}", coin_file));
             
-            let (snark_input, new_coin) = withdraw_coin(&existing_coin.coin, scope_str.as_bytes());
+            let snark_input = withdraw_coin(&existing_coin.coin, scope_str.as_bytes());
             
             // Save withdrawal data
             let withdrawal_json = serde_json::to_string_pretty(&snark_input).unwrap();
@@ -211,9 +203,6 @@ fn main() {
             println!("Withdrawal created:");
             println!("  Withdrawn value: {}", snark_input.withdrawn_value);
             println!("  Label: {}", snark_input.label);
-            println!("  New nullifier: {}", snark_input.new_nullifier);
-            println!("  New secret: {}", snark_input.new_secret);
-            println!("  New commitment: {}", new_coin.commitment_hex);
             println!("  Snark input saved to: {}", output_file);
         }
         

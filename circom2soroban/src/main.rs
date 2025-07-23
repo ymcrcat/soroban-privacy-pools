@@ -90,9 +90,9 @@ fn print_vk(json_str: &String)
     println!("\n");
     println!("let ic1x = \"{}\";", vk.ic[1][0]);
     println!("let ic1y = \"{}\";", vk.ic[1][1]);
-    println!("\n");
-    println!("let ic2x = \"{}\";", vk.ic[2][0]);
-    println!("let ic2y = \"{}\";", vk.ic[2][1]);
+    // println!("\n");
+    // println!("let ic2x = \"{}\";", vk.ic[2][0]);
+    // println!("let ic2y = \"{}\";", vk.ic[2][1]);
     println!("// CODE END");
     
 }
@@ -120,8 +120,8 @@ fn vk_to_bytes(json_str: &String) -> Bytes
     let ic0y = vk_json.ic[0][1].clone();
     let ic1x = vk_json.ic[1][0].clone();
     let ic1y = vk_json.ic[1][1].clone();
-    let ic2x = vk_json.ic[2][0].clone();
-    let ic2y = vk_json.ic[2][1].clone();
+    // let ic2x = vk_json.ic[2][0].clone();
+    // let ic2y = vk_json.ic[2][1].clone();
 
     let vk = VerificationKey {
         alpha: g1_from_coords(&env, &alphax, &alphay),
@@ -133,7 +133,7 @@ fn vk_to_bytes(json_str: &String) -> Bytes
             [
                 g1_from_coords(&env, &ic0x, &ic0y),
                 g1_from_coords(&env, &ic1x, &ic1y),
-                g1_from_coords(&env, &ic2x, &ic2y),
+                // g1_from_coords(&env, &ic2x, &ic2y),
             ],
         ),
     };
