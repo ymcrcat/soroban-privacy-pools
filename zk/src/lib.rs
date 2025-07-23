@@ -1,3 +1,5 @@
+#![no_std]
+
 use soroban_sdk::{
     contracterror,
     crypto::bls12_381::{Fr, G1Affine, G2Affine, G1_SERIALIZED_SIZE, G2_SERIALIZED_SIZE},
