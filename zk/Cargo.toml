@@ -5,6 +5,7 @@ edition = "2024"
 
 [lib]
 crate-type = ["lib"]
+doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
