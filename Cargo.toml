@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-  "contracts/*",
+  "contracts/privacy-pools",
   "circom2soroban",
   "coinutils"
-]
+, "zk"]
 
 [workspace.dependencies]
 soroban-sdk = "23.0.0-rc.2.2"

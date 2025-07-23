@@ -8,7 +8,7 @@ use soroban_sdk::{
     Env, Vec, U256, Bytes
 };
 
-use crate::zk::{Groth16Verifier, Proof, VerificationKey, PublicSignals};
+use crate::{Groth16Verifier, Proof, VerificationKey, PublicSignals};
 
 fn g1_from_coords(env: &Env, x: &str, y: &str) -> G1Affine {
     let ark_g1 = ark_bls12_381::G1Affine::new(Fq::from_str(x).unwrap(), Fq::from_str(y).unwrap());

@@ -1,16 +1,13 @@
 [package]
-name = "privacy-pools"
-version = "0.0.0"
-edition = "2021"
-publish = false
+name = "zk"
+version = "0.1.0"
+edition = "2024"
 
 [lib]
-crate-type = ["lib", "cdylib"]
-doctest = false
+crate-type = ["lib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
-zk = { path = "../../zk" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

@@ -3,11 +3,9 @@ use soroban_sdk::{
     contract, contractimpl, 
     vec, Env, String, Vec, Address, symbol_short, Symbol, Bytes, BytesN
 };
-use zk::{Groth16Verifier, VerificationKey, Proof};
 
-use crate::zk::PublicSignals;
+use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
 
-mod zk;
 #[cfg(test)]
 mod test;
 
