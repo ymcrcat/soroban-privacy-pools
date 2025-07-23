@@ -326,6 +326,8 @@ soroban contract optimize --wasm target/wasm32v1-none/release/privacy_pools.wasm
 soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source alice --network futurenet -- --vk_bytes 110f0ab7ee573cb33bd7f21feca50c65b...
 ```
 
+**Note:** The constructor argument is passed as a Hex-encoding of a byte array, but without the `0x` prefix.
+
 ## Contributing
 
 Contributions are welcome! Please:
