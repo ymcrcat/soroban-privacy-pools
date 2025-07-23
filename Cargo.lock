@@ -267,6 +267,12 @@ checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
 
 [[package]]
 name = "base64"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
+
+[[package]]
+name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
@@ -351,6 +357,7 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-serialize",
+ "base64 0.21.7",
  "clap",
  "hex",
  "num-bigint",
@@ -358,6 +365,7 @@ dependencies = [
  "serde",
  "serde_json",
  "soroban-sdk",
+ "zk",
 ]
 
 [[package]]
@@ -1235,7 +1243,7 @@ version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6b6f7f2fcb69f747921f79f3926bd1e203fce4fef62c268dd3abfb6d86029aa"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "chrono",
  "hex",
  "indexmap 1.9.3",
@@ -1458,7 +1466,7 @@ version = "23.0.0-rc.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4762bd2702b9955bfe8100125b3efbf4b72c71f6f9b509ed0bdc9b9797e54b1"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "stellar-xdr",
  "thiserror",
  "wasmparser",
@@ -1532,7 +1540,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "632bf15309c2992c059fb499275a706f6afdfd68c690508d5d9bfa96c771477f"
 dependencies = [
  "arbitrary",
- "base64",
+ "base64 0.22.1",
  "cfg_eval",
  "crate-git-revision",
  "escape-bytes",

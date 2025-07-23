@@ -3,6 +3,18 @@ use std::fs;
 use clap::Parser;
 use num_bigint::BigUint;
 use num_traits::Num;
+use base64::{self, engine::general_purpose};
+use base64::engine::Engine;
+
+// imports related to constructing VK, Proof and Public Signals
+use core::str::FromStr;
+use soroban_sdk::{Bytes, Env, Vec};
+use ark_bls12_381::{Fq, Fq2};
+use ark_serialize::CanonicalSerialize;
+use soroban_sdk::crypto::bls12_381::{G1Affine, G2Affine, G1_SERIALIZED_SIZE, G2_SERIALIZED_SIZE};
+use zk::{VerificationKey, Proof, PublicSignals};
+use soroban_sdk::crypto::bls12_381::Fr;
+use soroban_sdk::U256;
 
 #[derive(Parser)]
 struct Args {
@@ -17,7 +29,7 @@ struct VerificationKeyJson {
     vk_gamma_2: [[String; 2]; 3],
     vk_delta_2: [[String; 2]; 3],
     #[serde(rename = "IC")]
-    ic: Vec<[String; 3]>,
+    ic: std::vec::Vec<[String; 3]>,
 }
 
 #[derive(Deserialize)]
@@ -32,12 +44,29 @@ struct ProofJson {
 }
 
 // Remove the old PublicOutputJson struct and replace with type alias
-type PublicOutputJson = Vec<String>;
+type PublicOutputJson = std::vec::Vec<String>;
+
+fn g1_from_coords(env: &Env, x: &str, y: &str) -> G1Affine {
+    let ark_g1 = ark_bls12_381::G1Affine::new(Fq::from_str(x).unwrap(), Fq::from_str(y).unwrap());
+    let mut buf = [0u8; G1_SERIALIZED_SIZE];
+    ark_g1.serialize_uncompressed(&mut buf[..]).unwrap();
+    G1Affine::from_array(env, &buf)
+}
+
+fn g2_from_coords(env: &Env, x1: &str, x2: &str, y1: &str, y2: &str) -> G2Affine {
+    let x = Fq2::new(Fq::from_str(x1).unwrap(), Fq::from_str(x2).unwrap());
+    let y = Fq2::new(Fq::from_str(y1).unwrap(), Fq::from_str(y2).unwrap());
+    let ark_g2 = ark_bls12_381::G2Affine::new(x, y);
+    let mut buf = [0u8; G2_SERIALIZED_SIZE];
+    ark_g2.serialize_uncompressed(&mut buf[..]).unwrap();
+    G2Affine::from_array(env, &buf)
+}
 
 fn print_vk(json_str: &String)
 {
     let vk: VerificationKeyJson = serde_json::from_str(json_str).expect("Invalid JSON");
 
+    println!("// CODE START");
     println!("let alphax = \"{}\";", vk.vk_alpha_1[0]);
     println!("let alphay = \"{}\";", vk.vk_alpha_1[1]);
     println!("\n");
@@ -64,11 +93,78 @@ fn print_vk(json_str: &String)
     println!("\n");
     println!("let ic2x = \"{}\";", vk.ic[2][0]);
     println!("let ic2y = \"{}\";", vk.ic[2][1]);
+    println!("// CODE END");
+    
+}
+
+fn vk_to_bytes(json_str: &String) -> Bytes
+{
+    let env = Env::default();
+
+    let vk_json: VerificationKeyJson = serde_json::from_str(json_str).expect("Invalid JSON");
+    let alphax = vk_json.vk_alpha_1[0].clone();
+    let alphay = vk_json.vk_alpha_1[1].clone();
+    let betax1 = vk_json.vk_beta_2[0][0].clone();
+    let betax2 = vk_json.vk_beta_2[0][1].clone();
+    let betay1 = vk_json.vk_beta_2[1][0].clone();
+    let betay2 = vk_json.vk_beta_2[1][1].clone();
+    let gammax1 = vk_json.vk_gamma_2[0][0].clone();
+    let gammax2 = vk_json.vk_gamma_2[0][1].clone();
+    let gammay1 = vk_json.vk_gamma_2[1][0].clone();
+    let gammay2 = vk_json.vk_gamma_2[1][1].clone();
+    let deltax1 = vk_json.vk_delta_2[0][0].clone();
+    let deltax2 = vk_json.vk_delta_2[0][1].clone();
+    let deltay1 = vk_json.vk_delta_2[1][0].clone();
+    let deltay2 = vk_json.vk_delta_2[1][1].clone();
+    let ic0x = vk_json.ic[0][0].clone();
+    let ic0y = vk_json.ic[0][1].clone();
+    let ic1x = vk_json.ic[1][0].clone();
+    let ic1y = vk_json.ic[1][1].clone();
+    let ic2x = vk_json.ic[2][0].clone();
+    let ic2y = vk_json.ic[2][1].clone();
+
+    let vk = VerificationKey {
+        alpha: g1_from_coords(&env, &alphax, &alphay),
+        beta: g2_from_coords(&env, &betax1, &betax2, &betay1, &betay2),
+        gamma: g2_from_coords(&env, &gammax1, &gammax2, &gammay1, &gammay2),
+        delta: g2_from_coords(&env, &deltax1, &deltax2, &deltay1, &deltay2),
+        ic: Vec::from_array(
+            &env,
+            [
+                g1_from_coords(&env, &ic0x, &ic0y),
+                g1_from_coords(&env, &ic1x, &ic1y),
+                g1_from_coords(&env, &ic2x, &ic2y),
+            ],
+        ),
+    };
+    
+    return vk.to_bytes(&env);
+}
+
+fn proof_to_bytes(json_str: &String) -> Bytes {
+    let env = Env::default();
+    let proof_json: ProofJson = serde_json::from_str(json_str).expect("Invalid JSON");
+    let pi_ax = proof_json.pi_a[0].clone();
+    let pi_ay = proof_json.pi_a[1].clone();
+    let pi_bx1 = proof_json.pi_b[0][0].clone();
+    let pi_bx2 = proof_json.pi_b[0][1].clone();
+    let pi_by1 = proof_json.pi_b[1][0].clone();
+    let pi_by2 = proof_json.pi_b[1][1].clone();
+    let pi_cx = proof_json.pi_c[0].clone();
+    let pi_cy = proof_json.pi_c[1].clone();
+
+    let proof = Proof {
+        a: g1_from_coords(&env, &pi_ax, &pi_ay),
+        b: g2_from_coords(&env, &pi_bx1, &pi_bx2, &pi_by1, &pi_by2),
+        c: g1_from_coords(&env, &pi_cx, &pi_cy),
+    };
+    proof.to_bytes(&env)
 }
 
 fn print_proof(json_str: &String) {
     let proof: ProofJson = serde_json::from_str(json_str).expect("Invalid JSON");
 
+    println!("// CODE START");
     println!("let pi_ax = \"{}\";", proof.pi_a[0]);
     println!("let pi_ay = \"{}\";", proof.pi_a[1]);
     println!("\n");
@@ -79,24 +175,26 @@ fn print_proof(json_str: &String) {
     println!("\n");
     println!("let pi_cx = \"{}\";", proof.pi_c[0]);
     println!("let pi_cy = \"{}\";", proof.pi_c[1]);
+    println!("// CODE END");
 }
 
 fn print_public_output(json_str: &String) {
     let public_output: PublicOutputJson = serde_json::from_str(json_str).expect("Invalid JSON");
 
+    println!("// CODE START");
     println!("// Public output signals:");
     for (i, signal) in public_output.iter().enumerate() {
         // Parse decimal string to BigUint
-        let value = BigUint::from_str_radix(signal, 10).unwrap();
+        let value = BigUint::from_str_radix(&signal, 10).unwrap();
         let mut bytes = value.to_bytes_be();
         // Pad to 32 bytes
         if bytes.len() < 32 {
-            let mut padded = vec![0u8; 32 - bytes.len()];
+            let mut padded = std::vec![0u8; 32 - bytes.len()];
             padded.extend_from_slice(&bytes);
             bytes = padded;
         }
         // Format as hex for Rust array
-        let bytes_str = bytes.iter().map(|b| format!("0x{:02x}", b)).collect::<Vec<_>>().join(", ");
+        let bytes_str = bytes.iter().map(|b| format!("0x{:02x}", b)).collect::<std::vec::Vec<_>>().join(", ");
         println!("let public_{} = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[{}]));", i, bytes_str);
     }
     
@@ -109,6 +207,29 @@ fn print_public_output(json_str: &String) {
         print!("Fr::from_u256(public_{})", i);
     }
     println!("]);");
+    println!("// CODE END");
+}
+
+fn public_output_to_bytes(json_str: &String) -> Bytes {
+    let env = Env::default();
+    let public_output: PublicOutputJson = serde_json::from_str(json_str).expect("Invalid JSON");
+    let mut pub_signals = Vec::new(&env);
+    for signal in public_output.iter() {
+        let value = num_bigint::BigUint::from_str_radix(signal, 10).unwrap();
+        let mut bytes = value.to_bytes_be();
+        // Pad to 32 bytes
+        if bytes.len() < 32 {
+            let mut padded = std::vec![0u8; 32 - bytes.len()];
+            padded.extend_from_slice(&bytes);
+            bytes = padded;
+        }
+        let arr: [u8; 32] = bytes.try_into().expect("slice with incorrect length");
+        let u256 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &arr));
+        let fr = Fr::from_u256(u256);
+        pub_signals.push_back(fr);
+    }
+    let public_signals = PublicSignals { pub_signals };
+    public_signals.to_bytes(&env)
 }
 
 fn main() {
@@ -117,13 +238,25 @@ fn main() {
     
     if args.filetype == "vk" {
         print_vk(&json_str);
+        let vk_bytes = vk_to_bytes(&json_str);
+        let vk_vec: std::vec::Vec<u8> = vk_bytes.iter().collect();
+        let vk_base64 = general_purpose::STANDARD.encode(&vk_vec);
+        println!("\nVK Base64 encoding:\n{}", vk_base64);
     }
 
     if args.filetype == "proof" {
         print_proof(&json_str);
+        let proof_bytes = proof_to_bytes(&json_str);
+        let proof_vec: std::vec::Vec<u8> = proof_bytes.iter().collect();
+        let proof_base64 = general_purpose::STANDARD.encode(&proof_vec);
+        println!("\nProof Base64 encoding:\n{}", proof_base64);
     }
 
     if args.filetype == "public" {
         print_public_output(&json_str);
+        let public_bytes = public_output_to_bytes(&json_str);
+        let public_vec: std::vec::Vec<u8> = public_bytes.iter().collect();
+        let public_base64 = general_purpose::STANDARD.encode(&public_vec);
+        println!("\nPublic signals Base64 encoding:\n{}", public_base64);
     }
 }
