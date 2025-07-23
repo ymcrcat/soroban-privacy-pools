@@ -303,6 +303,29 @@ This project is specifically designed to work with Soroban's BLS12-381 implement
 - **Field arithmetic**: All field operations use BLS12-381 scalar field
 - **Point serialization**: Consistent coordinate representation between snarkjs and arkworks
 
+## Building and Deploying the Privacy-Pools contract
+
+```bash
+# Generate a key for the deployer
+soroban keys generate --global alice --network futurenet
+
+# Fund the deployer address
+soroban keys fund alice --network futurenet
+```
+
+In the workspace directory run
+
+```bash
+# Build the contract
+cargo build --target wasm32v1-none --release -p privacy-pools
+
+# Optimize the WASM for Soroban
+soroban contract optimize --wasm target/wasm32v1-none/release/privacy_pools.wasm --wasm-out target/wasm32v1-none/release/privacy_pools.optimized.wasm
+
+# Deploy the contract to the testnet passing a Hex-encoded verification key as an argument to the constructor
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source alice --network futurenet -- --vk_bytes 110f0ab7ee573cb33bd7f21feca50c65b...
+```
+
 ## Contributing
 
 Contributions are welcome! Please:
