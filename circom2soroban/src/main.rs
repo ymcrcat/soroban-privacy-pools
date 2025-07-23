@@ -241,7 +241,9 @@ fn main() {
         let vk_bytes = vk_to_bytes(&json_str);
         let vk_vec: std::vec::Vec<u8> = vk_bytes.iter().collect();
         let vk_base64 = general_purpose::STANDARD.encode(&vk_vec);
+        let vk_hex = hex::encode(&vk_vec);
         println!("\nVK Base64 encoding:\n{}", vk_base64);
+        println!("VK Hex encoding:\n{}", vk_hex);
     }
 
     if args.filetype == "proof" {
@@ -249,7 +251,9 @@ fn main() {
         let proof_bytes = proof_to_bytes(&json_str);
         let proof_vec: std::vec::Vec<u8> = proof_bytes.iter().collect();
         let proof_base64 = general_purpose::STANDARD.encode(&proof_vec);
+        let proof_hex = hex::encode(&proof_vec);
         println!("\nProof Base64 encoding:\n{}", proof_base64);
+        println!("Proof Hex encoding:\n{}", proof_hex);
     }
 
     if args.filetype == "public" {
@@ -257,6 +261,8 @@ fn main() {
         let public_bytes = public_output_to_bytes(&json_str);
         let public_vec: std::vec::Vec<u8> = public_bytes.iter().collect();
         let public_base64 = general_purpose::STANDARD.encode(&public_vec);
+        let public_hex = hex::encode(&public_vec);
         println!("\nPublic signals Base64 encoding:\n{}", public_base64);
+        println!("Public signals Hex encoding:\n{}", public_hex);
     }
 }
