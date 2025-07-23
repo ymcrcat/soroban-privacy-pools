@@ -307,10 +307,10 @@ This project is specifically designed to work with Soroban's BLS12-381 implement
 
 ```bash
 # Generate a key for the deployer
-soroban keys generate --global alice --network futurenet
+soroban keys generate --global alice --network <NETWORK>
 
 # Fund the deployer address
-soroban keys fund alice --network futurenet
+soroban keys fund alice --network <NETWORK>
 ```
 
 In the workspace directory run
@@ -323,10 +323,22 @@ cargo build --target wasm32v1-none --release -p privacy-pools
 soroban contract optimize --wasm target/wasm32v1-none/release/privacy_pools.wasm --wasm-out target/wasm32v1-none/release/privacy_pools.optimized.wasm
 
 # Deploy the contract to the testnet passing a Hex-encoded verification key as an argument to the constructor
-soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source alice --network futurenet -- --vk_bytes 110f0ab7ee573cb33bd7f21feca50c65b...
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source alice --network <NETWORK> -- --vk_bytes <VK_BYTES_HEX>
 ```
 
 **Note:** The constructor argument is passed as a Hex-encoding of a byte array, but without the `0x` prefix.
+
+To deposit into the contract run
+
+```bash
+soroban contract invoke --id <CONTRACT_ID> --source alice --network <NETWORK> -- deposit --from alice --commitment <COMMITMENT_HEX>
+```
+
+and to withdraw
+
+```bash
+soroban contract invoke --id <CONTRACT_ID> --source alice --network <NETWORK> -- withdraw --to alice --nullifier <NULLIFIER_HEX> --proof_bytes <PROOF_BYTES_HEX> --pub_signals_bytes <PUBLIC_OUTPUT_HEX>
+```
 
 ## Contributing
 
