@@ -37,7 +37,7 @@ pub struct Contract;
 // <https://developers.stellar.org/docs/build/smart-contracts/overview>.
 #[contractimpl]
 impl Contract {
-    pub fn __constructor(env: Env, vk_bytes: Bytes) {
+    pub fn __constructor(env: &Env, vk_bytes: Bytes) {
         // Only allow initialization if not already set
         if env.storage().instance().has(&VK_KEY) {
             panic!("Contract already initialized");
@@ -103,17 +103,17 @@ impl Contract {
         return vec![env, String::from_str(env, ERROR_SUCCESS)]
     }
 
-    pub fn get_commitments(env: Env) -> Vec<BytesN<32>> {
+    pub fn get_commitments(env: &Env) -> Vec<BytesN<32>> {
         env.storage().instance().get(&COMMIT_KEY)
-            .unwrap_or(vec![&env])
+            .unwrap_or(vec![env])
     }
 
-    pub fn get_nullifiers(env: Env) -> Vec<BytesN<32>> {
+    pub fn get_nullifiers(env: &Env) -> Vec<BytesN<32>> {
         env.storage().instance().get(&NULL_KEY)
-            .unwrap_or(vec![&env])
+            .unwrap_or(vec![env])
     }
 
-    pub fn get_balance(env: Env) -> i128 {
+    pub fn get_balance(env: &Env) -> i128 {
         env.storage().instance().get(&BALANCE_KEY)
             .unwrap_or(0)
     }
