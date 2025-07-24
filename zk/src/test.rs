@@ -92,7 +92,7 @@ fn test_with_hardcoded_vk() {
 
     // Test Case 1: Verify the proof with the correct public output (33, copied from `data/public.json`)
     let output = Vec::from_array(&env, [Fr::from_u256(U256::from_u32(&env, 33))]);
-    let res = Groth16Verifier::verify_proof(&env, vk.clone(), proof.clone(), output).unwrap();
+    let res = Groth16Verifier::verify_proof(&env, vk.clone(), proof.clone(), &output).unwrap();
     assert_eq!(res, true);
 
     // Print out the budget report showing CPU and memory cost breakdown for
@@ -126,7 +126,7 @@ fn test_with_hardcoded_vk() {
 
     // Test Case 2: Verify the proof with an incorrect public output (22)
     let output = Vec::from_array(&env, [Fr::from_u256(U256::from_u32(&env, 22))]);
-    let res = Groth16Verifier::verify_proof(&env, vk, proof, output).unwrap();
+    let res = Groth16Verifier::verify_proof(&env, vk, proof, &output).unwrap();
     assert_eq!(res, false);
 }
 
@@ -185,7 +185,7 @@ fn test_with_circom2soroban_output() {
         c: g1_from_coords(&env, &pi_cx, &pi_cy),
     };
 
-    let res = Groth16Verifier::verify_proof(&env, vk, proof, Vec::from_array(&env, [Fr::from_u256(U256::from_u32(&env, 0))])).unwrap();
+    let res = Groth16Verifier::verify_proof(&env, vk, proof, &Vec::from_array(&env, [Fr::from_u256(U256::from_u32(&env, 0))])).unwrap();
     assert_eq!(res, false); // Should be false for dummy proof/key
 }
 
@@ -266,7 +266,7 @@ fn test_coin_ownership() {
     // Create output vector for verification:
     let output = Vec::from_array(&env, [Fr::from_u256(public_0), Fr::from_u256(public_1)]);
     
-    let res = Groth16Verifier::verify_proof(&env, vk, proof, output).unwrap();
+    let res = Groth16Verifier::verify_proof(&env, vk, proof, &output).unwrap();
     assert_eq!(res, true);
 }
 

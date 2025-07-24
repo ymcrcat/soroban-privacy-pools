@@ -24,7 +24,7 @@ const VK_KEY: Symbol = symbol_short!("vk");
 const FIXED_AMOUNT: i128 = 1000000000; // 1 XLM in stroops
 
 #[contract]
-pub struct Contract;
+pub struct PrivacyPoolsContract;
 
 // This is a sample contract. Replace this placeholder with your own contract logic.
 // A corresponding test example is available in `test.rs`.
@@ -36,7 +36,7 @@ pub struct Contract;
 // Refer to the official documentation:
 // <https://developers.stellar.org/docs/build/smart-contracts/overview>.
 #[contractimpl]
-impl Contract {
+impl PrivacyPoolsContract {
     pub fn __constructor(env: &Env, vk_bytes: Bytes) {
         // Only allow initialization if not already set
         if env.storage().instance().has(&VK_KEY) {
@@ -82,7 +82,7 @@ impl Contract {
 
         // In a real implementation, we would verify the zero-knowledge proof here
         // For this example, we'll skip the actual proof verification
-        let res = Groth16Verifier::verify_proof(env, vk, proof, pub_signals.pub_signals);
+        let res = Groth16Verifier::verify_proof(env, vk, proof, &pub_signals.pub_signals);
         if res.is_err() || !res.unwrap() {
             return vec![env, String::from_str(env, ERROR_COIN_OWNERSHIP_PROOF)]
         }

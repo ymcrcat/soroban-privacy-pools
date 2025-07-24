@@ -1,14 +1,14 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{vec, Address, Bytes, BytesN, Env, String};
-use soroban_sdk::testutils::Address as TestAddress;
 use ark_bls12_381::{Fq, Fq2};
 use ark_serialize::CanonicalSerialize;
 use core::str::FromStr;
 use soroban_sdk::{
+    vec, Address, Bytes, BytesN, Env, String,
     crypto::bls12_381::{G1Affine, G2Affine, G1_SERIALIZED_SIZE, G2_SERIALIZED_SIZE, Fr},
     U256
 };
+use soroban_sdk::testutils::Address as TestAddress;
 
 fn g1_from_coords(env: &Env, x: &str, y: &str) -> G1Affine {
     let ark_g1 = ark_bls12_381::G1Affine::new(Fq::from_str(x).unwrap(), Fq::from_str(y).unwrap());
@@ -57,16 +57,16 @@ fn init_vk(env: &Env) -> Bytes {
     let ic1y = "1183789540308001547069705756290550538783265182880422084641597548728082450785620403432008991010051245851892233685780";
 
     let vk = VerificationKey {
-        alpha: g1_from_coords(&env, alphax, alphay),
-        beta: g2_from_coords(&env, betax1, betax2, betay1, betay2),
-        gamma: g2_from_coords(&env, gammax1, gammax2, gammay1, gammay2),
-        delta: g2_from_coords(&env, deltax1, deltax2, deltay1, deltay2),
+        alpha: g1_from_coords(env, alphax, alphay),
+        beta: g2_from_coords(env, betax1, betax2, betay1, betay2),
+        gamma: g2_from_coords(env, gammax1, gammax2, gammay1, gammay2),
+        delta: g2_from_coords(env, deltax1, deltax2, deltay1, deltay2),
         ic: Vec::from_array(
             &env,
             [
-                g1_from_coords(&env, ic0x, ic0y),
-                g1_from_coords(&env, ic1x, ic1y),
-                // g1_from_coords(&env, ic2x, ic2y),
+                g1_from_coords(env, ic0x, ic0y),
+                g1_from_coords(env, ic1x, ic1y),
+                // g1_from_coords(env, ic2x, ic2y),
             ],
         ),
     };
@@ -121,13 +121,13 @@ fn init_erronous_pub_signals(env: &Env) -> Bytes {
 #[test]
 fn test_deposit_and_withdraw() {
     let env = Env::default();
-    let contract_id = env.register(Contract, (init_vk(&env),));
+    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
     
     // Create test addresses
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
     
-    let client = ContractClient::new(&env, &contract_id);
+    let client = PrivacyPoolsContractClient::new(&env, &contract_id);
 
     // Test initial balance
     assert_eq!(client.get_balance(), 0);
@@ -150,9 +150,7 @@ fn test_deposit_and_withdraw() {
     let nullifier = BytesN::from_array(&env, &[2u8; 32]);
     let proof = init_proof(&env);
     let pub_signals = init_pub_signals(&env);
-    
-    // Mock authentication for bob
-    env.mock_all_auths();
+
     let result = client.withdraw(&bob, &nullifier, &proof, &pub_signals);
     assert_eq!(
         result,
@@ -176,13 +174,13 @@ fn test_deposit_and_withdraw() {
 #[test]
 fn test_deposit_and_withdraw_wrong_proof() {
     let env = Env::default();
-    let contract_id = env.register(Contract, (init_vk(&env),));
+    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
     
     // Create test addresses
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
     
-    let client = ContractClient::new(&env, &contract_id);
+    let client = PrivacyPoolsContractClient::new(&env, &contract_id);
 
     // Test initial balance
     assert_eq!(client.get_balance(), 0);
@@ -206,8 +204,6 @@ fn test_deposit_and_withdraw_wrong_proof() {
     let proof = init_proof(&env);
     let pub_signals = init_erronous_pub_signals(&env);
     
-    // Mock authentication for bob
-    env.mock_all_auths();
     let result = client.withdraw(&bob, &nullifier, &proof, &pub_signals);
     assert_eq!(
         result,
@@ -221,8 +217,8 @@ fn test_deposit_and_withdraw_wrong_proof() {
 #[test]
 fn test_withdraw_insufficient_balance() {
     let env = Env::default();
-    let contract_id = env.register(Contract, (init_vk(&env),));
-    let client = ContractClient::new(&env, &contract_id);
+    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
+    let client = PrivacyPoolsContractClient::new(&env, &contract_id);
 
     let bob = Address::generate(&env);
     let nullifier = BytesN::from_array(&env, &[3u8; 32]);
@@ -243,8 +239,8 @@ fn test_withdraw_insufficient_balance() {
 #[test]
 fn test_reuse_nullifier() {
     let env = Env::default();
-    let contract_id = env.register(Contract, (init_vk(&env),));
-    let client = ContractClient::new(&env, &contract_id);
+    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
+    let client = PrivacyPoolsContractClient::new(&env, &contract_id);
 
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
@@ -258,15 +254,12 @@ fn test_reuse_nullifier() {
     let nullifier = BytesN::from_array(&env, &[5u8; 32]);
     let proof = init_proof(&env);
     let pub_signals = init_pub_signals(&env);
-    env.mock_all_auths();
     client.withdraw(&bob, &nullifier, &proof, &pub_signals);
 
     // Second deposit
     let commitment2 = BytesN::from_array(&env, &[6u8; 32]);
-    env.mock_all_auths();
     client.deposit(&alice, &commitment2);
     // Attempt to reuse nullifier
-    env.mock_all_auths();
     let result = client.withdraw(&bob, &nullifier, &proof, &pub_signals);
     assert_eq!(
         result,

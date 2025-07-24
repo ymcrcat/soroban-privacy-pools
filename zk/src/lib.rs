@@ -152,7 +152,7 @@ impl Groth16Verifier {
         env: &Env,
         vk: VerificationKey,
         proof: Proof,
-        pub_signals: Vec<Fr>,
+        pub_signals: &Vec<Fr>,
     ) -> Result<bool, Groth16Error> {
         let bls = env.crypto().bls12_381();
 
@@ -171,7 +171,7 @@ impl Groth16Verifier {
         // e(-A, B) * e(alpha, beta) * e(vk_x, gamma) * e(C, delta) == 1
         let neg_a = -proof.a;
         let vp1 = vec![env, neg_a, vk.alpha, vk_x, proof.c];
-        let vp2 = vec![env, proof.b, vk.beta, vk.gamma, vk.delta];
+        let vp2 = vec![&env, proof.b, vk.beta, vk.gamma, vk.delta];
 
         Ok(bls.pairing_check(vp1, vp2))
     }
