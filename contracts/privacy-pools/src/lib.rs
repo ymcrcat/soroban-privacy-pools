@@ -9,10 +9,18 @@ use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
 #[cfg(test)]
 mod test;
 
+// Error messages
+pub const ERROR_NULLIFIER_USED: &str = "Nullifier already used";
+pub const ERROR_INSUFFICIENT_BALANCE: &str = "Insufficient balance";
+pub const ERROR_COIN_OWNERSHIP_PROOF: &str = "Couldn't verify coin ownership proof";
+pub const ERROR_SUCCESS: &str = "Withdrawal successful";
+
+// Storage keys
 const COMMIT_KEY: Symbol = symbol_short!("commit");
 const NULL_KEY: Symbol = symbol_short!("null");
 const BALANCE_KEY: Symbol = symbol_short!("balance");
 const VK_KEY: Symbol = symbol_short!("vk");
+
 const FIXED_AMOUNT: i128 = 1000000000; // 1 XLM in stroops
 
 #[contract]
@@ -69,16 +77,15 @@ impl Contract {
             .unwrap_or(vec![env]);
         
         if nullifiers.contains(&nullifier) {
-            return vec![env, String::from_str(env, "Nullifier already used")]
+            return vec![env, String::from_str(env, ERROR_NULLIFIER_USED)]
         }
 
         // In a real implementation, we would verify the zero-knowledge proof here
         // For this example, we'll skip the actual proof verification
-        let res = Groth16Verifier::verify_proof(env.clone(), vk, proof, pub_signals.pub_signals).unwrap();
-        if !res {
-            return vec![env, String::from_str(env, "Couldn't verify coin ownership proof")]
+        let res = Groth16Verifier::verify_proof(env, vk, proof, pub_signals.pub_signals);
+        if res.is_err() || !res.unwrap() {
+            return vec![env, String::from_str(env, ERROR_COIN_OWNERSHIP_PROOF)]
         }
-
         
         // Add nullifier to used nullifiers
         nullifiers.push_back(nullifier);
@@ -88,12 +95,12 @@ impl Contract {
         let current_balance = env.storage().instance().get(&BALANCE_KEY)
             .unwrap_or(0);
         if current_balance < FIXED_AMOUNT {
-            return vec![env, String::from_str(env, "Insufficient balance")]
+            return vec![env, String::from_str(env, ERROR_INSUFFICIENT_BALANCE)]
         }
 
         env.storage().instance().set(&BALANCE_KEY, &(current_balance - FIXED_AMOUNT));
         
-        return vec![env, String::from_str(env, "Withdrawal successful")]
+        return vec![env, String::from_str(env, ERROR_SUCCESS)]
     }
 
     pub fn get_commitments(env: Env) -> Vec<BytesN<32>> {

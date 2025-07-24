@@ -158,7 +158,7 @@ fn test_deposit_and_withdraw() {
         result,
         vec![
             &env,
-            String::from_str(&env, "Withdrawal successful")
+            String::from_str(&env, ERROR_SUCCESS)
         ]
     );
 
@@ -169,6 +169,8 @@ fn test_deposit_and_withdraw() {
     let nullifiers = client.get_nullifiers();
     assert_eq!(nullifiers.len(), 1);
     assert_eq!(nullifiers.get(0).unwrap(), nullifier);
+
+    env.cost_estimate().budget().print();
 }
 
 #[test]
@@ -211,7 +213,7 @@ fn test_deposit_and_withdraw_wrong_proof() {
         result,
         vec![
             &env,
-            String::from_str(&env, "Couldn't verify coin ownership proof")
+            String::from_str(&env, ERROR_COIN_OWNERSHIP_PROOF)
         ]
     );
 }
@@ -233,7 +235,7 @@ fn test_withdraw_insufficient_balance() {
         result,
         vec![
             &env,
-            String::from_str(&env, "Insufficient balance")
+            String::from_str(&env, ERROR_INSUFFICIENT_BALANCE)
         ]
     );
 }
@@ -270,7 +272,7 @@ fn test_reuse_nullifier() {
         result,
         vec![
             &env,
-            String::from_str(&env, "Nullifier already used")
+            String::from_str(&env, ERROR_NULLIFIER_USED)
         ]
     );
 }
