@@ -160,6 +160,8 @@ fn test_deposit_and_withdraw() {
         ]
     );
 
+    env.cost_estimate().budget().print();
+
     // Check balance after withdrawal
     assert_eq!(client.get_balance(), 0);
 
@@ -168,7 +170,7 @@ fn test_deposit_and_withdraw() {
     assert_eq!(nullifiers.len(), 1);
     assert_eq!(nullifiers.get(0).unwrap(), nullifier);
 
-    env.cost_estimate().budget().print();
+    
 }
 
 #[test]
@@ -212,6 +214,8 @@ fn test_deposit_and_withdraw_wrong_proof() {
             String::from_str(&env, ERROR_COIN_OWNERSHIP_PROOF)
         ]
     );
+
+    // env.cost_estimate().budget().print();
 }
 
 #[test]
