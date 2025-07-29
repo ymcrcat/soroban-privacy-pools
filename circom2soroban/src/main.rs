@@ -30,6 +30,8 @@ struct VerificationKeyJson {
     vk_delta_2: [[String; 2]; 3],
     #[serde(rename = "IC")]
     ic: std::vec::Vec<[String; 3]>,
+    #[serde(rename = "nPublic")]
+    n_public: u32,
 }
 
 #[derive(Deserialize)]
@@ -62,9 +64,20 @@ fn g2_from_coords(env: &Env, x1: &str, x2: &str, y1: &str, y2: &str) -> G2Affine
     G2Affine::from_array(env, &buf)
 }
 
+fn validate_vk(vk: &VerificationKeyJson) {
+    let expected_ic_size = (vk.n_public + 1) as usize;
+    if vk.ic.len() != expected_ic_size {
+        panic!("Invalid verification key: IC array has {} elements but nPublic={} requires {} elements", 
+               vk.ic.len(), vk.n_public, expected_ic_size);
+    }
+}
+
 fn print_vk(json_str: &String)
 {
     let vk: VerificationKeyJson = serde_json::from_str(json_str).expect("Invalid JSON");
+    
+    // Validate the verification key structure
+    validate_vk(&vk);
 
     println!("// CODE START");
     println!("let alphax = \"{}\";", vk.vk_alpha_1[0]);
@@ -85,16 +98,16 @@ fn print_vk(json_str: &String)
     println!("let deltay1 = \"{}\";", vk.vk_delta_2[1][0]);
     println!("let deltay2 = \"{}\";", vk.vk_delta_2[1][1]);
     println!("\n");
-    println!("let ic0x = \"{}\";", vk.ic[0][0]);
-    println!("let ic0y = \"{}\";", vk.ic[0][1]);
-    println!("\n");
-    println!("let ic1x = \"{}\";", vk.ic[1][0]);
-    println!("let ic1y = \"{}\";", vk.ic[1][1]);
-    // println!("\n");
-    // println!("let ic2x = \"{}\";", vk.ic[2][0]);
-    // println!("let ic2y = \"{}\";", vk.ic[2][1]);
-    println!("// CODE END");
     
+    // Generate IC variables based on nPublic
+    // The IC array has nPublic + 1 elements (first is generator point)
+    for i in 0..=vk.n_public {
+        println!("let ic{}x = \"{}\";", i, vk.ic[i as usize][0]);
+        println!("let ic{}y = \"{}\";", i, vk.ic[i as usize][1]);
+        println!("\n");
+    }
+    
+    println!("// CODE END");
 }
 
 fn vk_to_bytes(json_str: &String) -> Bytes
@@ -102,6 +115,10 @@ fn vk_to_bytes(json_str: &String) -> Bytes
     let env = Env::default();
 
     let vk_json: VerificationKeyJson = serde_json::from_str(json_str).expect("Invalid JSON");
+    
+    // Validate the verification key structure
+    validate_vk(&vk_json);
+    
     let alphax = vk_json.vk_alpha_1[0].clone();
     let alphay = vk_json.vk_alpha_1[1].clone();
     let betax1 = vk_json.vk_beta_2[0][0].clone();
@@ -116,26 +133,21 @@ fn vk_to_bytes(json_str: &String) -> Bytes
     let deltax2 = vk_json.vk_delta_2[0][1].clone();
     let deltay1 = vk_json.vk_delta_2[1][0].clone();
     let deltay2 = vk_json.vk_delta_2[1][1].clone();
-    let ic0x = vk_json.ic[0][0].clone();
-    let ic0y = vk_json.ic[0][1].clone();
-    let ic1x = vk_json.ic[1][0].clone();
-    let ic1y = vk_json.ic[1][1].clone();
-    // let ic2x = vk_json.ic[2][0].clone();
-    // let ic2y = vk_json.ic[2][1].clone();
+    
+    // Build IC array dynamically based on nPublic
+    let mut ic_array = Vec::new(&env);
+    for i in 0..=vk_json.n_public {
+        let icx = vk_json.ic[i as usize][0].clone();
+        let icy = vk_json.ic[i as usize][1].clone();
+        ic_array.push_back(g1_from_coords(&env, &icx, &icy));
+    }
 
     let vk = VerificationKey {
         alpha: g1_from_coords(&env, &alphax, &alphay),
         beta: g2_from_coords(&env, &betax1, &betax2, &betay1, &betay2),
         gamma: g2_from_coords(&env, &gammax1, &gammax2, &gammay1, &gammay2),
         delta: g2_from_coords(&env, &deltax1, &deltax2, &deltay1, &deltay2),
-        ic: Vec::from_array(
-            &env,
-            [
-                g1_from_coords(&env, &ic0x, &ic0y),
-                g1_from_coords(&env, &ic1x, &ic1y),
-                // g1_from_coords(&env, &ic2x, &ic2y),
-            ],
-        ),
+        ic: ic_array,
     };
     
     return vk.to_bytes(&env);
