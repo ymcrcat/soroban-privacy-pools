@@ -156,7 +156,7 @@ fn test_deposit_and_withdraw() {
         result,
         vec![
             &env,
-            String::from_str(&env, ERROR_SUCCESS)
+            String::from_str(&env, ERROR_WITHDRAW_SUCCESS)
         ]
     );
 
