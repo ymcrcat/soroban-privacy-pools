@@ -9,11 +9,14 @@ include "comparators.circom";
 // testing the full Merkle tree implementation.
 
 template Dummy() {
+    // Inputs
     signal input withdrawnValue;
     signal input label;                 // keccak256(scope, nonce) % SNARK_SCALAR_FIELD
     signal input existingValue;         // value of the existing commitment
     signal input existingNullifier;     // nullifier of the existing commitment
     signal input existingSecret;        // Secret of the existing commitment
+
+    // Outputs
     signal output existingNullifierHash;    // hash of existing commitment nullifier
 
     // IMPLEMENTATION
