@@ -5,6 +5,7 @@ test_snapshots
 circuits/build
 circuits/output
 circuits/input
+circuits/test/node_modules
 # Local settings
 .soroban
 .stellar

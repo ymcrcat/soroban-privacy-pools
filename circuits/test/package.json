@@ -1,0 +1,23 @@
+{
+  "name": "merkleproof-tests",
+  "version": "1.0.0",
+  "description": "Test suite for MerkleProof circuit",
+  "main": "test_merkleProof.js",
+  "scripts": {
+    "test": "node test_merkleProof.js",
+    "compile": "circom test_merkleProof.circom --r1cs --wasm --sym -o ../build -l /opt/homebrew/lib/node_modules/circomlib/circuits --prime bls12381",
+    "generate-witness": "node ../build/test_merkleProof_js/generate_witness.js ../build/test_merkleProof_js/test_merkleProof.wasm test_inputs.json witness.wtns"
+  },
+  "dependencies": {
+    "circomlibjs": "^0.1.7"
+  },
+  "devDependencies": {},
+  "keywords": [
+    "circom",
+    "merkle-tree",
+    "zero-knowledge",
+    "testing"
+  ],
+  "author": "",
+  "license": "MIT"
+}
