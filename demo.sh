@@ -57,14 +57,13 @@ cargo run --bin circom2soroban proof circuits/proof.json > proof_hex.txt || { ec
 cargo run --bin circom2soroban public circuits/public.json > public_hex.txt || { echo "❌ Error: Failed to convert public signals"; exit 1; }
 PROOF_HEX=$(cat proof_hex.txt | grep -o '[0-9a-f]*$')
 PUBLIC_HEX=$(cat public_hex.txt | grep -o '[0-9a-f]*$')
-NULLIFIER=$(cat demo_coin.json | jq -r '.coin.nullifier')
-if [ -z "$PROOF_HEX" ] || [ -z "$PUBLIC_HEX" ] || [ -z "$NULLIFIER" ]; then
-    echo "❌ Error: Failed to extract proof, public signals, or nullifier"
+if [ -z "$PROOF_HEX" ] || [ -z "$PUBLIC_HEX" ]; then
+    echo "❌ Error: Failed to extract proof or public signals"
     exit 1
 fi
 # Step 6: Withdraw
 echo "💸 Withdrawing coin..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- withdraw --to demo_user --nullifier $NULLIFIER --proof_bytes $PROOF_HEX --pub_signals_bytes $PUBLIC_HEX || { echo "❌ Error: Failed to withdraw coin"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- withdraw --to demo_user --proof_bytes $PROOF_HEX --pub_signals_bytes $PUBLIC_HEX || { echo "❌ Error: Failed to withdraw coin"; exit 1; }
 echo "Withdrawal successful!"
 # Step 7: Verify
 echo "✅ Verifying withdrawal..."

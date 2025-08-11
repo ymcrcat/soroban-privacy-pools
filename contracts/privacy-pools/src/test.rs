@@ -147,11 +147,12 @@ fn test_deposit_and_withdraw() {
     assert_eq!(commitments.get(0).unwrap(), commitment);
 
     // Test withdraw
-    let nullifier = BytesN::from_array(&env, &[2u8; 32]);
     let proof = init_proof(&env);
     let pub_signals = init_pub_signals(&env);
+    let pub_signals_struct = PublicSignals::from_bytes(&env, &pub_signals);
+    let nullifier = pub_signals_struct.pub_signals.get(0).unwrap().to_bytes();
 
-    let result = client.withdraw(&bob, &nullifier, &proof, &pub_signals);
+    let result = client.withdraw(&bob, &proof, &pub_signals);
     assert_eq!(
         result,
         vec![
@@ -202,11 +203,10 @@ fn test_deposit_and_withdraw_wrong_proof() {
     assert_eq!(commitments.get(0).unwrap(), commitment);
 
     // Test withdraw
-    let nullifier = BytesN::from_array(&env, &[2u8; 32]);
     let proof = init_proof(&env);
     let pub_signals = init_erronous_pub_signals(&env);
     
-    let result = client.withdraw(&bob, &nullifier, &proof, &pub_signals);
+    let result = client.withdraw(&bob, &proof, &pub_signals);
     assert_eq!(
         result,
         vec![
@@ -225,12 +225,11 @@ fn test_withdraw_insufficient_balance() {
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
 
     let bob = Address::generate(&env);
-    let nullifier = BytesN::from_array(&env, &[3u8; 32]);
     let proof = init_proof(&env);
     let pub_signals = init_pub_signals(&env);
     // Attempt to withdraw with zero balance
     env.mock_all_auths();
-    let result = client.withdraw(&bob, &nullifier, &proof, &pub_signals);
+    let result = client.withdraw(&bob, &proof, &pub_signals);
     assert_eq!(
         result,
         vec![
@@ -255,16 +254,15 @@ fn test_reuse_nullifier() {
     client.deposit(&alice, &commitment);
 
     // First withdraw
-    let nullifier = BytesN::from_array(&env, &[5u8; 32]);
     let proof = init_proof(&env);
     let pub_signals = init_pub_signals(&env);
-    client.withdraw(&bob, &nullifier, &proof, &pub_signals);
+    client.withdraw(&bob, &proof, &pub_signals);
 
     // Second deposit
     let commitment2 = BytesN::from_array(&env, &[6u8; 32]);
     client.deposit(&alice, &commitment2);
     // Attempt to reuse nullifier
-    let result = client.withdraw(&bob, &nullifier, &proof, &pub_signals);
+    let result = client.withdraw(&bob, &proof, &pub_signals);
     assert_eq!(
         result,
         vec![

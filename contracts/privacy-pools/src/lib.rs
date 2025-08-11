@@ -125,8 +125,7 @@ impl PrivacyPoolsContract {
     /// * The nullifier ensures the same commitment cannot be spent twice
     /// * The zero-knowledge proof proves ownership without revealing the commitment details
     pub fn withdraw(env: &Env, 
-            to: Address, 
-            nullifier: BytesN<32>, 
+            to: Address,
             proof_bytes: Bytes, 
             pub_signals_bytes: Bytes) -> Vec<String> {
         to.require_auth();
@@ -139,6 +138,8 @@ impl PrivacyPoolsContract {
         // Check if nullifier has been used before
         let mut nullifiers: Vec<BytesN<32>> = env.storage().instance().get(&NULL_KEY)
             .unwrap_or(vec![env]);
+
+        let nullifier = pub_signals.pub_signals.get(0).unwrap().to_bytes();
         
         if nullifiers.contains(&nullifier) {
             return vec![env, String::from_str(env, ERROR_NULLIFIER_USED)]
