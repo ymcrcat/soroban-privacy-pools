@@ -12,35 +12,37 @@ A privacy-preserving transaction system built on Stellar using Soroban smart con
 
 ## Project Structure
 
-```text
+```
 .
-├── circuits/                    # Circom circuits for zero-knowledge proofs
-│   ├── commitment.circom        # Commitment hashing logic
-│   ├── dummy.circom             # Simplified circuit for testing
-│   ├── main.circom              # Main withdrawal verification circuit
-│   ├── keccak256.circom         # Keccak256 hash implementation
-│   ├── merkleProof.circom       # Merkle tree inclusion proof
-│   ├── build/                   # Compiled circuit artifacts
-│   ├── input/                   # Test input files
-│   └── output/                  # Generated keys and proofs
-├── contracts/                   # Soroban smart contracts
+├── circuits/                 # Circom circuits for zero-knowledge proofs
+│   ├── commitment.circom     # Commitment hashing logic
+│   ├── dummy.circom          # Simplified circuit for testing
+│   ├── main.circom           # Main withdrawal verification circuit
+│   ├── keccak256.circom      # Keccak256 hash implementation
+│   ├── merkleProof.circom    # Merkle tree inclusion proof
+│   ├── build/                # Compiled circuit artifacts
+│   ├── input/                # Test input files
+│   └── output/               # Generated keys and proofs
+├── contracts/                # Soroban smart contracts
 │   └── privacy-pools/
 │       ├── src/
-│       │   ├── lib.rs           # Main contract logic
-│       │   ├── test.rs          # Contract tests
-│       │   └── zk/              # Zero-knowledge verification
-│       │       ├── mod.rs       # ZK proof verification logic
-│       │       └── test.rs      # ZK verification tests
+│       │   ├── lib.rs        # Main contract logic
+│       │   └── test.rs       # Contract tests
 │       ├── Cargo.toml
 │       └── Makefile
-├── circom2soroban/              # Utility for converting circom artifacts
-│   ├── src/main.rs              # Converts VK/proofs/public to Soroban format
+├── zk/                       # Zero-knowledge verification library
+│   ├── src/
+│   │   ├── lib.rs            # ZK proof verification logic
+│   │   └── test.rs           # ZK verification tests
 │   └── Cargo.toml
-├── coinutils/                   # Coin generation and management utility
-│   ├── src/main.rs              # CLI for generating coins and withdrawal inputs
+├── circom2soroban/           # Utility for converting circom artifacts
+│   ├── src/main.rs           # Converts VK/proofs/public to Soroban format
 │   └── Cargo.toml
-├── Cargo.toml                   # Workspace configuration
-├── Makefile                     # Circuit compilation commands
+├── coinutils/                # Coin generation and management utility
+│   ├── src/main.rs           # CLI for generating coins and withdrawal inputs
+│   └── Cargo.toml
+├── Cargo.toml                # Workspace configuration
+├── Makefile                  # Circuit compilation commands
 └── README.md
 ```
 
@@ -337,7 +339,7 @@ soroban contract invoke --id <CONTRACT_ID> --source alice --network <NETWORK> --
 and to withdraw
 
 ```bash
-soroban contract invoke --id <CONTRACT_ID> --source alice --network <NETWORK> -- withdraw --to alice --nullifier <NULLIFIER> --proof_bytes <PROOF_BYTES_HEX> --pub_signals_bytes <PUBLIC_OUTPUT_HEX>
+soroban contract invoke --id <CONTRACT_ID> --source alice --network <NETWORK> -- withdraw --to alice --proof_bytes <PROOF_BYTES_HEX> --pub_signals_bytes <PUBLIC_OUTPUT_HEX>
 ```
 
 ## Demo: Complete Privacy Pool Workflow
@@ -463,13 +465,10 @@ echo "Public signals: $PUBLIC_HEX"
 Use the proof to withdraw the coin:
 
 ```bash
-# Extract nullifier from the coin file
-NULLIFIER=$(cat demo_coin.json | jq -r '.coin.nullifier')
-
 # Withdraw using the proof
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- withdraw --to demo_user --nullifier $NULLIFIER --proof_bytes $PROOF_HEX --pub_signals_bytes $PUBLIC_HEX
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- withdraw --to demo_user --proof_bytes $PROOF_HEX --pub_signals_bytes $PUBLIC_HEX
 
-echo "Successfully withdrew coin with nullifier: $NULLIFIER"
+echo "Successfully withdrew coin"
 ```
 
 ### Step 7: Verify the Withdrawal
@@ -563,16 +562,15 @@ cargo run --bin circom2soroban public circuits/public.json > public_hex.txt || {
 
 PROOF_HEX=$(cat proof_hex.txt | grep -o '[0-9a-f]*$')
 PUBLIC_HEX=$(cat public_hex.txt | grep -o '[0-9a-f]*$')
-NULLIFIER=$(cat demo_coin.json | jq -r '.coin.nullifier')
 
-if [ -z "$PROOF_HEX" ] || [ -z "$PUBLIC_HEX" ] || [ -z "$NULLIFIER" ]; then
-    echo "❌ Error: Failed to extract proof, public signals, or nullifier"
+if [ -z "$PROOF_HEX" ] || [ -z "$PUBLIC_HEX" ]; then
+    echo "❌ Error: Failed to extract proof or public signals"
     exit 1
 fi
 
 # Step 6: Withdraw
 echo "💸 Withdrawing coin..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- withdraw --to demo_user --nullifier $NULLIFIER --proof_bytes $PROOF_HEX --pub_signals_bytes $PUBLIC_HEX || { echo "❌ Error: Failed to withdraw coin"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- withdraw --to demo_user --proof_bytes $PROOF_HEX --pub_signals_bytes $PUBLIC_HEX || { echo "❌ Error: Failed to withdraw coin"; exit 1; }
 echo "Withdrawal successful!"
 
 # Step 7: Verify
@@ -587,7 +585,7 @@ echo "🎉 Demo completed successfully!"
 
 When running the demo, you should see output similar to:
 
-```
+```bash
 🚀 Starting Privacy Pool Demo...
 📦 Deploying contract...
 Contract deployed: CABC123...
