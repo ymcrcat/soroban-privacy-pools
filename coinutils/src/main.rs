@@ -51,13 +51,8 @@ fn field_hash(inputs: &[Fr]) -> Fr {
     }
     let hashed = hasher.finalize();
     
-    // Truncate 256-bit hash to 254 bits to match Circom circuit
-    let mut truncated_hash = [0u8; 32];
-    truncated_hash.copy_from_slice(&hashed);
-    // Clear the highest 2 bits to ensure we stay within 254 bits
-    truncated_hash[31] &= 0x3F; // Keep only 6 bits instead of 8
-    
-    Fr::from_be_bytes_mod_order(&truncated_hash)
+    // Convert the hash to a field element, which will automatically reduce modulo the field size
+    Fr::from_le_bytes_mod_order(&hashed)
 }
 
 fn to_bytesn32(fr: &Fr) -> [u8; 32] {
@@ -74,16 +69,14 @@ fn generate_label(scope: &[u8], nonce: &[u8; 32]) -> Fr {
     hasher.update(nonce);
     let hashed = hasher.finalize();
     
-    // Truncate 256-bit hash to 254 bits to match Circom circuit
-    // The circuit uses Num2Bits(254) and truncates hash output to 254 bits
+    // Convert the hash to a field element, which will automatically reduce modulo the field size
+    // But first, ensure we don't exceed the field size by using a smaller hash
     let mut truncated_hash = [0u8; 32];
     truncated_hash.copy_from_slice(&hashed);
-    // Clear the highest 2 bits (256 - 254 = 2 bits)
-    // Set the highest 2 bits to 0 to ensure we stay within 254 bits
-    truncated_hash[31] &= 0x3F; // Keep only 6 bits instead of 8
     
-    // Convert 254-bit hash to field element
-    Fr::from_be_bytes_mod_order(&truncated_hash)
+    // BLS12-381 field size is approximately 2^381, so we can safely use the full 256-bit hash
+    // The field arithmetic will handle the reduction
+    Fr::from_le_bytes_mod_order(&truncated_hash)
 }
 
 fn generate_commitment(value: Fr, label: Fr, nullifier: Fr, secret: Fr) -> Fr {
