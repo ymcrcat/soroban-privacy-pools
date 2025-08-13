@@ -181,20 +181,21 @@ impl PrivacyPoolsContract {
         if res.is_err() || !res.unwrap() {
             return vec![env, String::from_str(env, ERROR_COIN_OWNERSHIP_PROOF)]
         }
-        
-        // Add nullifier to used nullifiers
-        nullifiers.push_back(nullifier);
-        env.storage().instance().set(&NULL_KEY, &nullifiers);
 
-        // Check and update contract balance
+        // Check contract balance before updating state
         let current_balance = env.storage().instance().get(&BALANCE_KEY)
             .unwrap_or(0);
         if current_balance < FIXED_AMOUNT {
             return vec![env, String::from_str(env, ERROR_INSUFFICIENT_BALANCE)]
         }
 
+        // Add nullifier to used nullifiers only after all checks pass
+        nullifiers.push_back(nullifier);
+        env.storage().instance().set(&NULL_KEY, &nullifiers);
+
+        // Update contract balance
         env.storage().instance().set(&BALANCE_KEY, &(current_balance - FIXED_AMOUNT));
-        
+
         return vec![env, String::from_str(env, ERROR_WITHDRAW_SUCCESS)]
     }
 
