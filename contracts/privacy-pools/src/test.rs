@@ -237,6 +237,9 @@ fn test_withdraw_insufficient_balance() {
             String::from_str(&env, ERROR_INSUFFICIENT_BALANCE)
         ]
     );
+
+    // Ensure nullifier was not stored when withdrawal failed
+    assert_eq!(client.get_nullifiers().len(), 0);
 }
 
 #[test]
