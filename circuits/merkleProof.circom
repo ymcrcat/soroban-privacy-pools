@@ -1,6 +1,6 @@
 pragma circom 2.2.0;
 
-include "poseidon.circom";
+include "keccak256.circom";
 include "comparators.circom";
 include "mux1.circom";
 
@@ -33,7 +33,7 @@ template MerkleProof(maxDepth) {
     component siblingIsEmpty[maxDepth]; // checks if sibling node is empty
     component hashInCorrectOrder[maxDepth]; // orders node pairs for hashing
     component latestValidHash[maxDepth]; // selects between hash and propagation
-    component poseidons[maxDepth];
+    component hashes[maxDepth]; // Hash components (can use any hash function)
 
     // implmenentation
     component depthCheck = LessEqThan(6);
@@ -55,16 +55,17 @@ template MerkleProof(maxDepth) {
         hashInCorrectOrder[i].c <== childrenToSort;
         hashInCorrectOrder[i].s <== indices[i];
         
-        // hash the nodes
-        poseidons[i] = Poseidon(2);
-        poseidons[i].inputs <== hashInCorrectOrder[i].out;
+        // hash the nodes using the specified hash function
+        hashes[i] = Keccak256FieldHash2();
+        hashes[i].in[0] <== hashInCorrectOrder[i].out[0];
+        hashes[i].in[1] <== hashInCorrectOrder[i].out[1];
         
         // check if sibling is empty
         siblingIsEmpty[i] = IsZero();
         siblingIsEmpty[i].in <== siblings[i];
 
         // either keep the previous hash or the new one
-        nodes[i + 1] <== (nodes[i] - poseidons[i].out) * siblingIsEmpty[i].out + poseidons[i].out;
+        nodes[i + 1] <== (nodes[i] - hashes[i].out) * siblingIsEmpty[i].out + hashes[i].out;
     }
 
     out <== nodes[maxDepth];
