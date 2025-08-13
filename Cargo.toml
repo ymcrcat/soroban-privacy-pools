@@ -3,8 +3,11 @@ resolver = "2"
 members = [
   "contracts/privacy-pools",
   "circom2soroban",
-  "coinutils"
-, "zk"]
+  "coinutils",
+  "zk",
+  "lean-imt",
+  "circuits/test"
+]
 
 [workspace.dependencies]
 soroban-sdk = "23.0.0-rc.2.2"
