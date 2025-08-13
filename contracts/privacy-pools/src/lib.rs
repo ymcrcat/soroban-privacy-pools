@@ -5,6 +5,7 @@ use soroban_sdk::{
 };
 
 use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
+use lean_imt::{LeanIMT, TREE_ROOT_KEY, TREE_DEPTH_KEY, TREE_LEAVES_KEY};
 
 #[cfg(test)]
 mod test;
@@ -16,7 +17,6 @@ pub const ERROR_COIN_OWNERSHIP_PROOF: &str = "Couldn't verify coin ownership pro
 pub const ERROR_WITHDRAW_SUCCESS: &str = "Withdrawal successful";
 
 // Storage keys
-const COMMIT_KEY: Symbol = symbol_short!("commit");
 const NULL_KEY: Symbol = symbol_short!("null");
 const BALANCE_KEY: Symbol = symbol_short!("balance");
 const VK_KEY: Symbol = symbol_short!("vk");
@@ -26,15 +26,6 @@ const FIXED_AMOUNT: i128 = 1000000000; // 1 XLM in stroops
 #[contract]
 pub struct PrivacyPoolsContract;
 
-// This is a sample contract. Replace this placeholder with your own contract logic.
-// A corresponding test example is available in `test.rs`.
-//
-// For comprehensive examples, visit <https://github.com/stellar/soroban-examples>.
-// The repository includes use cases for the Stellar ecosystem, such as data storage on
-// the blockchain, token swaps, liquidity pools, and more.
-//
-// Refer to the official documentation:
-// <https://developers.stellar.org/docs/build/smart-contracts/overview>.
 #[contractimpl]
 impl PrivacyPoolsContract {
     pub fn __constructor(env: &Env, vk_bytes: Bytes) {
@@ -43,9 +34,49 @@ impl PrivacyPoolsContract {
             panic!("Contract already initialized");
         }
         env.storage().instance().set(&VK_KEY, &vk_bytes);
+        
+        // Initialize empty merkle tree
+        let tree = LeanIMT::new(env.clone());
+        let (leaves, depth, root) = tree.to_storage();
+        env.storage().instance().set(&TREE_LEAVES_KEY, &leaves);
+        env.storage().instance().set(&TREE_DEPTH_KEY, &depth);
+        env.storage().instance().set(&TREE_ROOT_KEY, &root);
     }
 
-    /// Deposits funds into the privacy pool and stores a commitment.
+    /// Stores a commitment in the merkle tree and updates the tree state
+    /// 
+    /// # Arguments
+    /// * `env` - The Soroban environment
+    /// * `commitment` - The commitment to store
+    /// 
+    /// # Returns
+    /// * A tuple of (updated_merkle_root, leaf_index) after insertion
+    fn store_commitment(env: &Env, commitment: BytesN<32>) -> (BytesN<32>, u32) {
+        // Load current tree state
+        let leaves: Vec<BytesN<32>> = env.storage().instance().get(&TREE_LEAVES_KEY)
+            .unwrap_or(vec![&env]);
+        let depth: u32 = env.storage().instance().get(&TREE_DEPTH_KEY)
+            .unwrap_or(0);
+        let root: BytesN<32> = env.storage().instance().get(&TREE_ROOT_KEY)
+            .unwrap_or(BytesN::from_array(&env, &[0u8; 32]));
+        
+        // Create tree and insert new commitment
+        let mut tree = LeanIMT::from_storage(env.clone(), leaves, depth, root);
+        tree.insert(commitment);
+        
+        // Get the leaf index (it's the last leaf in the tree)
+        let leaf_index = tree.get_leaf_count() - 1;
+        
+        // Store updated tree state
+        let (new_leaves, new_depth, new_root) = tree.to_storage();
+        env.storage().instance().set(&TREE_LEAVES_KEY, &new_leaves);
+        env.storage().instance().set(&TREE_DEPTH_KEY, &new_depth);
+        env.storage().instance().set(&TREE_ROOT_KEY, &new_root);
+
+        (new_root, leaf_index)
+    }
+
+    /// Deposits funds into the privacy pool and stores a commitment in the merkle tree.
     ///
     /// This function allows a user to deposit a fixed amount (1 XLM) into the privacy pool
     /// while providing a cryptographic commitment that will be used for zero-knowledge proof
@@ -58,29 +89,32 @@ impl PrivacyPoolsContract {
     /// * `commitment` - A 32-byte cryptographic commitment that will be used to prove
     ///                 ownership during withdrawal without revealing the actual coin details
     ///
+    /// # Returns
+    ///
+    /// * The leaf index where the commitment was stored in the merkle tree
+    ///
     /// # Security
     ///
     /// * Requires authentication from the `from` address
-    /// * The commitment is stored publicly but cannot be used to trace the actual deposit
+    /// * The commitment is stored in a merkle tree for efficient inclusion proofs
     /// * Each deposit adds exactly `FIXED_AMOUNT` (1 XLM) to the contract balance
     ///
     /// # Storage
     ///
-    /// * Updates the commitments list with the new commitment
+    /// * Updates the merkle tree with the new commitment
     /// * Increases the contract balance by `FIXED_AMOUNT`
-    pub fn deposit(env: &Env, from: Address, commitment: BytesN<32>) {
+    pub fn deposit(env: &Env, from: Address, commitment: BytesN<32>) -> u32 {
         from.require_auth();
         
-        // Store the commitment
-        let mut commitments: Vec<BytesN<32>> = env.storage().instance().get(&COMMIT_KEY)
-            .unwrap_or(vec![&env]);
-        commitments.push_back(commitment);
-        env.storage().instance().set(&COMMIT_KEY, &commitments);
+        // Store the commitment in the merkle tree
+        let (_, leaf_index) = Self::store_commitment(env, commitment);
 
         // Update contract balance
         let current_balance = env.storage().instance().get(&BALANCE_KEY)
             .unwrap_or(0);
         env.storage().instance().set(&BALANCE_KEY, &(current_balance + FIXED_AMOUNT));
+
+        leaf_index
     }
 
     /// Withdraws funds from the privacy pool using a zero-knowledge proof.
@@ -93,8 +127,6 @@ impl PrivacyPoolsContract {
     ///
     /// * `env` - The Soroban environment
     /// * `to` - The address of the recipient (must be authenticated)
-    /// * `nullifier` - A 32-byte unique identifier that prevents double-spending of the same
-    ///                commitment. Each nullifier can only be used once.
     /// * `proof_bytes` - The serialized zero-knowledge proof demonstrating ownership of a
     ///                   commitment without revealing the commitment itself
     /// * `pub_signals_bytes` - The serialized public signals associated with the proof
@@ -166,8 +198,28 @@ impl PrivacyPoolsContract {
         return vec![env, String::from_str(env, ERROR_WITHDRAW_SUCCESS)]
     }
 
+    /// Gets the current merkle root of the commitment tree
+    pub fn get_merkle_root(env: &Env) -> BytesN<32> {
+        env.storage().instance().get(&TREE_ROOT_KEY)
+            .unwrap_or(BytesN::from_array(&env, &[0u8; 32]))
+    }
+
+    /// Gets the current depth of the merkle tree
+    pub fn get_merkle_depth(env: &Env) -> u32 {
+        env.storage().instance().get(&TREE_DEPTH_KEY)
+            .unwrap_or(0)
+    }
+
+    /// Gets the number of commitments (leaves) in the merkle tree
+    pub fn get_commitment_count(env: &Env) -> u32 {
+        let leaves: Vec<BytesN<32>> = env.storage().instance().get(&TREE_LEAVES_KEY)
+            .unwrap_or(vec![&env]);
+        leaves.len() as u32
+    }
+
+    /// Gets all commitments (leaves) in the merkle tree
     pub fn get_commitments(env: &Env) -> Vec<BytesN<32>> {
-        env.storage().instance().get(&COMMIT_KEY)
+        env.storage().instance().get(&TREE_LEAVES_KEY)
             .unwrap_or(vec![env])
     }
 
