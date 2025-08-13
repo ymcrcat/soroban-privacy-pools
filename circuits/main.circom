@@ -8,52 +8,48 @@ template Withdraw(maxTreeDepth) {
     // PUBLIC SIGNALS
     signal input withdrawnValue;
 
+    // PRIVATE SIGNALS
     // signals for merkle tree inclusion proofs
     signal input stateRoot;             // a known state root
     signal input stateTreeDepth;        // current state tree depth
-    
-    // PRIVATE SIGNALS
 
     // signals to compute commitments
     signal input label;                 // keccak256(scope, nonce) % SNARK_SCALAR_FIELD
-    signal input existingValue;         // value of the existing commitment
-    signal input existingNullifier;     // nullifier of the existing commitment
-    signal input existingSecret;        // Secret of the existing commitment
-    signal input newNullifier;          // nullifier of the new commitment
-    signal input newSecret;             // secret of the new commitment
+    signal input value;                 // value of the commitment
+    signal input nullifier;             // nullifier of the commitment
+    signal input secret;                // Secret of the commitment
 
     // signals for merkle tree inclusion proofs
     signal input stateSiblings[maxTreeDepth];   // siblings of the state tree
     signal input stateIndex;                     // indices for the state tree
 
     // OUTPUT SIGNALS
-    signal output newCommitmentHash;        // hash of new commitment
-    signal output existingNullifierHash;    // hash of existing commitment nullifier
+    signal output nullifierHash;        // hash of commitment nullifier
 
     // IMPLEMENTATION
 
-    // compute existing commitment
-    component existingCommitmentHasher = CommitmentHasher();
-    existingCommitmentHasher.label <== label;
-    existingCommitmentHasher.value <== existingValue;
-    existingCommitmentHasher.secret <== existingSecret;
-    existingCommitmentHasher.nullifier <== existingNullifier;
-    signal existingCommitment <== existingCommitmentHasher.commitment;
+    // compute commitment
+    component commitmentHasher = CommitmentHasher();
+    commitmentHasher.label <== label;
+    commitmentHasher.value <== value;
+    commitmentHasher.secret <== secret;
+    commitmentHasher.nullifier <== nullifier;
+    signal commitment <== commitmentHasher.commitment;
 
-    // output existing nullifier hash
-    existingNullifierHash <== existingCommitmentHasher.nullifierHash;
+    // output nullifier hash
+    nullifierHash <== commitmentHasher.nullifierHash;
 
-    // verify existing commitment is in the state tree
+    // verify commitment is in the state tree
     component stateRootChecker = MerkleProof(maxTreeDepth);
-    stateRootChecker.leaf <== existingCommitment;
+    stateRootChecker.leaf <== commitment;
     stateRootChecker.leafIndex <== stateIndex;
     stateRootChecker.siblings <== stateSiblings;
     stateRootChecker.actualDepth <== stateTreeDepth;
     
     stateRoot === stateRootChecker.out;
 
-    // check the withdrawn value is valid
-    signal remainingValue <== existingValue - withdrawnValue;
+    // check the withdrawn value is valid (must not exceed commitment value)
+    signal remainingValue <== value - withdrawnValue;
     component remainingValueRangeCheck = Num2Bits(128);
     remainingValueRangeCheck.in <== remainingValue;
     _ <== remainingValueRangeCheck.out;
@@ -62,22 +58,8 @@ template Withdraw(maxTreeDepth) {
     withdrawnValueRangeCheck.in <== withdrawnValue;
     _ <== withdrawnValueRangeCheck.out;
 
-    // check existing and new nullifiers are different
-    component nullifierEqualityCheck = IsEqual();
-    nullifierEqualityCheck.in[0] <== existingNullifier;
-    nullifierEqualityCheck.in[1] <== newNullifier;
-    nullifierEqualityCheck.out === 0;
-
-    // compute new commitment
-    component newCommitmentHasher = CommitmentHasher();
-    newCommitmentHasher.label <== label;
-    newCommitmentHasher.value <== remainingValue;
-    newCommitmentHasher.nullifier <== newNullifier;
-    newCommitmentHasher.secret <== newSecret;
-
-    // output new commitment hash
-    newCommitmentHash <== newCommitmentHasher.commitment;
-    _ <== newCommitmentHasher.nullifierHash;
+    // ensure withdrawn value doesn't exceed commitment value
+    // (this is enforced by the remainingValue being non-negative through range check)
 }
 
-component main = Withdraw(20);  // 20 levels = 1,048,576-leaf tree
+component main {public [withdrawnValue, stateRoot, stateTreeDepth]} = Withdraw(20);  // 20 levels = 1,048,576-leaf tree
