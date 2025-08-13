@@ -369,6 +369,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "circuit-tests"
+version = "0.1.0"
+dependencies = [
+ "lean-imt",
+ "serde",
+ "serde_json",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "clap"
 version = "4.5.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -925,6 +935,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lean-imt"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.172"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1092,6 +1109,7 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-serialize",
+ "lean-imt",
  "soroban-sdk",
  "zk",
 ]
