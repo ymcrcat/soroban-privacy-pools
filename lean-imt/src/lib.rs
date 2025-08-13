@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    vec, Env, Vec, BytesN, symbol_short, Symbol
+    symbol_short, vec, Bytes, BytesN, Env, Symbol, Vec
 };
 
 /// Storage keys for the LeanIMT
@@ -144,21 +144,23 @@ impl LeanIMT {
         }
     }
 
-    /// Hashes two values using a simple hash function
-    /// This provides a basic hash for the merkle tree
-    /// Note: In production, this should be replaced with a proper hash function
+    /// Hashes two values using Keccak256 hash function
+    /// This provides a cryptographically secure hash for the merkle tree
     fn hash_pair(&self, left: &BytesN<32>, right: &BytesN<32>) -> BytesN<32> {
-        // For now, use a simple XOR-based hash to avoid complex type conversions
-        // In production, this should be replaced with a proper Keccak256 implementation
+        // Concatenate left and right bytes
         let left_bytes = left.to_array();
         let right_bytes = right.to_array();
         
-        let mut result = [0u8; 32];
-        for i in 0..32 {
-            result[i] = left_bytes[i] ^ right_bytes[i];
-        }
+        let mut combined = [0u8; 64];
+        combined[..32].copy_from_slice(&left_bytes);
+        combined[32..].copy_from_slice(&right_bytes);
         
-        BytesN::from_array(&self.env, &result)
+        // Convert to Bytes and use Keccak256 from the crypto module
+        let combined_bytes = Bytes::from_slice(&self.env, &combined);
+        let hash_result = self.env.crypto().keccak256(&combined_bytes);
+        
+        // Convert Hash<32> back to BytesN<32>
+        BytesN::from_array(&self.env, &hash_result.to_array())
     }
 
     /// Serializes the tree state for storage
