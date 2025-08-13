@@ -214,6 +214,10 @@ fn test_deposit_and_withdraw_wrong_proof() {
             String::from_str(&env, ERROR_COIN_OWNERSHIP_PROOF)
         ]
     );
+    assert_eq!(client.get_balance(), FIXED_AMOUNT);
+    let nullifiers = client.get_nullifiers();
+    assert_eq!(nullifiers.len(), 0);
+
 
     // env.cost_estimate().budget().print();
 }
