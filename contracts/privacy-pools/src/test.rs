@@ -278,3 +278,53 @@ fn test_reuse_nullifier() {
         ]
     );
 }
+
+#[test]
+fn test_keccak256_compatibility() {
+    let env = Env::default();
+    
+    // Test vectors matching the JavaScript reference values
+    // These should match the outputs from generate_keccak_reference.js
+    
+    // Test 1: Single byte 0x00
+    let input1 = Bytes::from_array(&env, &[0x00]);
+    let hash1 = env.crypto().keccak256(&input1);
+    let expected1 = "bc36789e7a1e281436464229828f817d6612f7b477d66591ff96a9e064bcc98a";
+    assert_eq!(hex::encode(hash1.to_array()), expected1);
+    
+    // Test 2: Single byte 0xFF
+    let input2 = Bytes::from_array(&env, &[0xFF]);
+    let hash2 = env.crypto().keccak256(&input2);
+    let expected2 = "8b1a944cf13a9a1c08facb2c9e98623ef3254d2ddb48113885c3e8e97fec8db9";
+    assert_eq!(hex::encode(hash2.to_array()), expected2);
+    
+    // Test 3: Two bytes 0x0102
+    let input3 = Bytes::from_array(&env, &[0x01, 0x02]);
+    let hash3 = env.crypto().keccak256(&input3);
+    let expected3 = "22ae6da6b482f9b1b19b0b897c3fd43884180a1c5ee361e1107a1bc635649dda";
+    assert_eq!(hex::encode(hash3.to_array()), expected3);
+    
+    // Test 4: 32 bytes all zeros
+    let input4 = Bytes::from_array(&env, &[0u8; 32]);
+    let hash4 = env.crypto().keccak256(&input4);
+    let expected4 = "290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563";
+    assert_eq!(hex::encode(hash4.to_array()), expected4);
+    
+    // Test 5: Merkle tree style (64 bytes: left=1, right=2) - MOST IMPORTANT TEST
+    // This matches exactly what the Soroban LeanIMT hash_pair function does
+    let mut combined = [0u8; 64];
+    combined[31] = 0x01; // Left value = 1 (32 bytes)
+    combined[63] = 0x02; // Right value = 2 (32 bytes)
+    let input5 = Bytes::from_slice(&env, &combined);
+    let hash5 = env.crypto().keccak256(&input5);
+    let expected5 = "e90b7bceb6e7df5418fb78d8ee546e97c83a08bbccc01a0644d599ccd2a7c2e0";
+    assert_eq!(hex::encode(hash5.to_array()), expected5);
+    
+    // Test 6: Empty input
+    let input6 = Bytes::from_array(&env, &[]);
+    let hash6 = env.crypto().keccak256(&input6);
+    let expected6 = "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
+    assert_eq!(hex::encode(hash6.to_array()), expected6);
+    
+    // All tests passed - Soroban's keccak256 matches the js-sha3 reference implementation
+}
