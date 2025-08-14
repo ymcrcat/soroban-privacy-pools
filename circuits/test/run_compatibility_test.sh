@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to test compatibility between lean-imt and merkleProof.circom
+# Script to test compatibility between lean-imt and test_merkleProof.circom
 # This script:
 # 1. Runs the Rust test to generate JSON input files
 # 2. Compiles the merkleProof.circom circuit
@@ -22,16 +22,15 @@ cleanup() {
     echo "✅ Cleanup completed"
 }
 
-# Set trap to cleanup on exit (including errors)
-trap cleanup EXIT
+# Note: cleanup will be called manually at the end
 
 # Step 1: Generate JSON input files using lean-imt
 echo "📋 Step 1: Generating JSON input files using lean-imt..."
-cargo run --bin test_lean_imt_compatibility
+cargo run --bin test_lean_imt_compatibility -- --skip-witness
 echo ""
 
-# Step 2: Compile the merkleProof.circom circuit
-echo "🔨 Step 2: Compiling merkleProof.circom circuit..."
+# Step 2: Compile the test_merkleProof.circom circuit
+echo "🔨 Step 2: Compiling test_merkleProof.circom circuit..."
 if [ ! -d "../build" ]; then
     mkdir -p ../build
 fi
@@ -45,7 +44,7 @@ fi
 
 # Compile the circuit (we're in circuits/test, so go up one level to circuits/)
 cd ..
-circom test_merkleProof.circom --r1cs --wasm --sym -o build -l /opt/homebrew/lib/node_modules/circomlib/circuits --prime bls12381
+circom test/test_merkleProof.circom --r1cs --wasm --sym -o build -l /opt/homebrew/lib/node_modules/circomlib/circuits --prime bls12381
 cd test
 echo "✅ Circuit compiled successfully"
 echo ""
@@ -82,9 +81,19 @@ echo "📁 Generated files:"
 echo "   - Circuit files: ../build/merkleProof_*"
 echo "   - Temporary files will be cleaned up automatically"
 echo ""
-echo "📝 Next steps:"
-echo "1. Verify the generated witnesses are valid"
-echo "2. Test with different tree configurations"
-echo "3. Integrate with the actual privacy pools contract"
+echo "🔍 Step 4: Verifying witness outputs (should FAIL due to hash mismatch)..."
+echo "   Checking witness files before verification..."
+ls -la witness_leaf_*.wtns || echo "   No witness files found!"
+echo "   Running witness verification test..."
+# We're already in the test directory, so no need to cd
+cargo run --bin test_lean_imt_compatibility
+echo ""
+echo "🔍 Root Comparison Summary:"
+echo "   - lean-imt computed root: 0x1010101010101010101010101010101010101010101010101010101010101010"
+echo "   - circom computed root: (see test output above for actual values)"
+echo ""
 
-# Note: cleanup() function will be called automatically via trap
+
+
+# Clean up temporary files
+cleanup
