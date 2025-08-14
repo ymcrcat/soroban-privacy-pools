@@ -1,7 +1,26 @@
 pragma circom 2.2.0;
 
-include "keccak256.circom";
+include "keccak256.circom";  // Uses standard field-compatible hashing for commitments
 
+/**
+ * @title CommitmentHasher template
+ * @dev Template for generating privacy pool commitments and nullifier hashes
+ * 
+ * @notice HASH FUNCTION CHOICE:
+ *   This template uses the standard field-compatible hash functions:
+ *   - Keccak256FieldHash1(): For single field elements (254-bit safe)
+ *   - Keccak256FieldHash2(): For two field elements (254-bit safe) 
+ *   - Keccak256FieldHash3(): For three field elements (254-bit safe)
+ * 
+ *   These are DIFFERENT from the Merkle tree hashing which must use
+ *   Keccak256FieldHash2_256() for Soroban compatibility. The commitment
+ *   hashing doesn't need Soroban compatibility since commitments are
+ *   generated and verified entirely within the circom circuit.
+ * 
+ * @notice COMMITMENT STRUCTURE:
+ *   commitment = Keccak256(value, label, Keccak256(nullifier, secret))
+ *   nullifierHash = Keccak256(nullifier)
+ */
 template CommitmentHasher() {
     
     // inputs
