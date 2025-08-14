@@ -1,36 +1,33 @@
 pragma circom 2.2.0;
 
 include "../merkleProof.circom";
-include "poseidon.circom";
 
 /**
- * @title MerkleProof Test Template
- * @dev Single test template that can handle different depths dynamically
- * @notice Tests various scenarios for merkle proof verification
- * @param maxDepth Maximum depth for testing (handles depths 0 to maxDepth)
+ * @title TestMerkleProof template
+ * @dev Simple test circuit that instantiates the MerkleProof template
+ * @notice This is used to test compatibility between lean-imt and merkleProof.circom
+ * @param maxDepth The maximum depth of the Merkle tree (set to 4 for testing)
  */
-template MerkleProofTest(maxDepth) {
-    // Test inputs
-    signal input testLeaf;              // Leaf value to test
-    signal input testLeafIndex;         // Index of the leaf
-    signal input testSiblings[maxDepth]; // Sibling values (padded to maxDepth)
-    signal input testActualDepth;       // Actual tree depth (0 to maxDepth)
+template TestMerkleProof(maxDepth) {
+    // inputs 
+    signal input leaf;                  // leaf value to prove inclusion of
+    signal input leafIndex;             // index of leaf in the Merkle tree
+    signal input siblings[maxDepth];    // sibling values along the path to the root
+    signal input actualDepth;           // current tree depth
+
+    // outputs
+    signal output out;
     
-    // Expected output for verification
-    signal input expectedRoot;          // Expected merkle root
-    
-    // Circuit instance
+    // Instantiate the MerkleProof template
     component merkleProof = MerkleProof(maxDepth);
+    merkleProof.leaf <== leaf;
+    merkleProof.leafIndex <== leafIndex;
+    merkleProof.siblings <== siblings;
+    merkleProof.actualDepth <== actualDepth;
     
-    // Connect inputs to the circuit
-    merkleProof.leaf <== testLeaf;
-    merkleProof.leafIndex <== testLeafIndex;
-    merkleProof.siblings <== testSiblings;
-    merkleProof.actualDepth <== testActualDepth;
-    
-    // Verify the output matches expected root
-    merkleProof.out === expectedRoot;
+    // Output the computed root
+    out <== merkleProof.out;
 }
 
-// Main component with configurable max depth for testing
-component main = MerkleProofTest(4); // Can be changed to test different depths
+// Main component for testing
+component main {public [leaf, leafIndex, actualDepth]} = TestMerkleProof(4);
