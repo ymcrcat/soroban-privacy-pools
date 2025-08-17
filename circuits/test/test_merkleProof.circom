@@ -10,13 +10,13 @@ include "../merkleProof.circom";
  */
 template TestMerkleProof(maxDepth) {
     // inputs 
-    signal input leaf;                  // leaf value to prove inclusion of
+    signal input leaf;             // leaf value to prove inclusion of (256-bit array)
     signal input leafIndex;             // index of leaf in the Merkle tree
-    signal input siblings[maxDepth];    // sibling values along the path to the root
+    signal input siblings[maxDepth]; // sibling values along the path to the root (256-bit arrays)
     signal input actualDepth;           // current tree depth
 
     // outputs
-    signal output out;
+    signal output out;             // root hash (256-bit array)
     
     // Instantiate the MerkleProof template
     component merkleProof = MerkleProof(maxDepth);

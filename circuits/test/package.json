@@ -9,9 +9,9 @@
     "generate-witness": "node ../build/test_merkleProof_js/generate_witness.js ../build/test_merkleProof_js/test_merkleProof.wasm test_inputs.json witness.wtns"
   },
   "dependencies": {
-    "circomlibjs": "^0.1.7"
+    "circomlibjs": "^0.1.7",
+    "poseidon-lite": "^0.3.0"
   },
-  "devDependencies": {},
   "keywords": [
     "circom",
     "merkle-tree",

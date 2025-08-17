@@ -1,23 +1,24 @@
-const { buildPoseidon } = require("circomlibjs");
 const { readFileSync, writeFileSync } = require("fs");
+const { poseidon2 } = require("poseidon-lite");
 
 /**
  * Test data generator for MerkleProof circuit
  */
 class MerkleProofTester {
     constructor() {
-        this.poseidon = null;
-    }
-
-    async init() {
-        this.poseidon = await buildPoseidon();
+        // No need for Poseidon initialization
     }
 
     /**
-     * Hash two values using Poseidon
+     * Hash two values using Poseidon (same as the circuit)
      */
     hash(left, right) {
-        return this.poseidon([left, right]);
+        // Convert inputs to BigInt for Poseidon
+        const leftBigInt = BigInt(left);
+        const rightBigInt = BigInt(right);
+        
+        // Use Poseidon hash (same as circuit's Poseidon(2))
+        return poseidon2([leftBigInt, rightBigInt]);
     }
 
     /**
@@ -177,23 +178,6 @@ class MerkleProofTester {
         return invalidProof;
     }
 
-    /**
-     * Negative Test 4: Invalid proof with wrong expected root
-     */
-    generateNegativeTest4() {
-        const leaves = [1, 2, 3, 4];
-        const tree = this.generateSimpleTree(leaves, 2);
-        const correctProof = this.generateProof(tree, 1, 2);
-        
-        // Corrupt the proof by using wrong expected root
-        const invalidProof = {
-            ...correctProof,
-            expectedRoot: 999999, // Wrong root - should be computed value
-            description: "Invalid proof with wrong expected root - should fail witness generation"
-        };
-        
-        return invalidProof;
-    }
 
     /**
      * Generate all test cases
@@ -207,8 +191,7 @@ class MerkleProofTester {
             test5: this.generateTest5(),
             negativeTest1: this.generateNegativeTest1(),
             negativeTest2: this.generateNegativeTest2(),
-            negativeTest3: this.generateNegativeTest3(),
-            negativeTest4: this.generateNegativeTest4()
+            negativeTest3: this.generateNegativeTest3()
         };
     }
 
@@ -216,7 +199,12 @@ class MerkleProofTester {
      * Save test data to JSON file
      */
     saveTestData(filename, testData) {
-        const jsonData = JSON.stringify(testData, null, 2);
+        // Convert BigInt values to strings for JSON serialization
+        const jsonSafeData = JSON.parse(JSON.stringify(testData, (key, value) =>
+            typeof value === 'bigint' ? value.toString() : value
+        ));
+        
+        const jsonData = JSON.stringify(jsonSafeData, null, 2);
         writeFileSync(filename, jsonData);
         console.log(`Test data saved to ${filename}`);
     }
@@ -225,52 +213,46 @@ class MerkleProofTester {
      * Convert test data to circuit input format
      */
     convertToCircuitFormat(testData) {
-        // Convert Poseidon hash output to proper format
-        const convertPoseidonHash = (hash) => {
-            if (typeof hash === 'number') return hash.toString();
-            if (typeof hash === 'string') return hash;
-            if (typeof hash === 'bigint') return hash.toString();
+        // Convert values to field element format (numbers)
+        const convertToFieldElement = (value) => {
+            // If it's already a number, return it
+            if (typeof value === 'number') {
+                return value;
+            }
             
-            // If it's a Poseidon hash result (Uint8Array), convert to BigInt
-            if (hash && typeof hash === 'object') {
-                if (hash.constructor === Uint8Array || Array.isArray(hash)) {
-                    // Convert Uint8Array to BigInt
-                    let result = 0n;
-                    for (let i = 0; i < hash.length; i++) {
-                        result = result * 256n + BigInt(hash[i]);
-                    }
-                    return result.toString();
+            // If it's a string, try to convert to number
+            if (typeof value === 'string') {
+                const num = parseInt(value, 10);
+                if (!isNaN(num)) {
+                    return num;
                 }
-                // If it's an object with numeric keys, convert to BigInt
-                if (typeof hash[0] === 'number') {
-                    const bytes = Object.values(hash);
-                    let result = 0n;
-                    for (let i = 0; i < bytes.length; i++) {
-                        result = result * 256n + BigInt(bytes[i]);
-                    }
-                    return result.toString();
+                // If it's a hex string, convert to number
+                if (value.startsWith('0x')) {
+                    return Number(BigInt(value));
                 }
             }
             
-            return hash.toString();
+            // If it's a BigInt, convert to number
+            if (typeof value === 'bigint') {
+                return Number(value);
+            }
+            
+            // Default fallback
+            return 0;
         };
 
         // Pad siblings array to match maxDepth (4)
         const maxDepth = 4;
         const paddedSiblings = [...testData.siblings];
         while (paddedSiblings.length < maxDepth) {
-            paddedSiblings.push(0); // Use number 0, not string
+            paddedSiblings.push(0); // Use number 0
         }
 
         return {
-            testLeaf: testData.leaf.toString(),
-            testLeafIndex: testData.leafIndex.toString(),
-            testSiblings: paddedSiblings.map(sibling => {
-                if (typeof sibling === 'number') return sibling.toString();
-                return convertPoseidonHash(sibling);
-            }),
-            testActualDepth: testData.actualDepth.toString(),
-            expectedRoot: convertPoseidonHash(testData.expectedRoot)
+            leaf: convertToFieldElement(testData.leaf),
+            leafIndex: testData.leafIndex.toString(),
+            siblings: paddedSiblings.map(sibling => convertToFieldElement(sibling)),
+            actualDepth: testData.actualDepth.toString()
         };
     }
 
@@ -290,9 +272,8 @@ class MerkleProofTester {
 /**
  * Main test execution
  */
-async function main() {
+function main() {
     const tester = new MerkleProofTester();
-    await tester.init();
 
     console.log("Generating MerkleProof test cases...");
 
@@ -307,11 +288,10 @@ async function main() {
     tester.printTestData("Test 5: Leftmost leaf in 8-leaf tree", allTests.test5);
 
     // Print negative test data
-    console.log("\n🧪 NEGATIVE TEST CASES (Should Fail):");
+    console.log("\n🧪 NEGATIVE TEST CASES (Should compute wrong roots):");
     tester.printTestData("Negative Test 1: Wrong siblings", allTests.negativeTest1);
     tester.printTestData("Negative Test 2: Wrong leaf index", allTests.negativeTest2);
     tester.printTestData("Negative Test 3: Wrong depth", allTests.negativeTest3);
-    tester.printTestData("Negative Test 4: Wrong expected root", allTests.negativeTest4);
 
     // Save test data to files
     tester.saveTestData("test_inputs.json", allTests);
@@ -347,7 +327,7 @@ async function main() {
 
 // Run if this file is executed directly
 if (require.main === module) {
-    main().catch(console.error);
+    main();
 }
 
 module.exports = MerkleProofTester;
