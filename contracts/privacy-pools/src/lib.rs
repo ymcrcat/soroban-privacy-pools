@@ -1,4 +1,10 @@
 #![no_std]
+
+// Add global allocator for wasm32v1-none target
+extern crate wee_alloc;
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
 use soroban_sdk::{
     contract, contractimpl, 
     vec, Env, String, Vec, Address, symbol_short, Symbol, Bytes, BytesN
