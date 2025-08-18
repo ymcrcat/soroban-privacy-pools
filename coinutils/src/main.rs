@@ -69,13 +69,14 @@ fn generate_label(scope: &[u8], nonce: &[u8; 32]) -> Fr {
     hasher.update(nonce);
     let hashed = hasher.finalize();
     
-    // Convert the hash to a field element, which will automatically reduce modulo the field size
-    // But first, ensure we don't exceed the field size by using a smaller hash
+    // Ensure the label fits in 254 bits by masking the highest 2 bits
+    // This prevents potential issues with field arithmetic
     let mut truncated_hash = [0u8; 32];
     truncated_hash.copy_from_slice(&hashed);
     
-    // BLS12-381 field size is approximately 2^381, so we can safely use the full 256-bit hash
-    // The field arithmetic will handle the reduction
+    // Clear the highest 2 bits to ensure 254-bit compatibility
+    truncated_hash[31] &= 0x3F; // Clear bits 254 and 255
+    
     Fr::from_le_bytes_mod_order(&truncated_hash)
 }
 
