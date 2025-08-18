@@ -1,8 +1,10 @@
 #![no_std]
 
 use soroban_sdk::{
-    symbol_short, vec, Bytes, BytesN, Env, Symbol, Vec
+    symbol_short, vec, BytesN, Env, Symbol, Vec
 };
+
+mod poseidon;
 
 /// Storage keys for the LeanIMT
 pub const TREE_ROOT_KEY: Symbol = symbol_short!("root");
@@ -147,20 +149,7 @@ impl LeanIMT {
     /// Hashes two values using Keccak256 hash function
     /// This provides a cryptographically secure hash for the merkle tree
     fn hash_pair(&self, left: &BytesN<32>, right: &BytesN<32>) -> BytesN<32> {
-        // Concatenate left and right bytes
-        let left_bytes = left.to_array();
-        let right_bytes = right.to_array();
-        
-        let mut combined = [0u8; 64];
-        combined[..32].copy_from_slice(&left_bytes);
-        combined[32..].copy_from_slice(&right_bytes);
-        
-        // Convert to Bytes and use Keccak256 from the crypto module
-        let combined_bytes = Bytes::from_slice(&self.env, &combined);
-        let hash_result = self.env.crypto().keccak256(&combined_bytes);
-        
-        // Convert Hash<32> back to BytesN<32>
-        BytesN::from_array(&self.env, &hash_result.to_array())
+        poseidon::poseidon2_bytes(&self.env, left, right)
     }
 
     /// Serializes the tree state for storage
