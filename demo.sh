@@ -5,6 +5,9 @@ echo "🚀 Starting Privacy Pool Demo..."
 echo "🔍 Checking prerequisites..."
 command -v jq >/dev/null 2>&1 || { echo "❌ Error: jq is required but not installed. Please install jq first."; exit 1; }
 command -v soroban >/dev/null 2>&1 || { echo "❌ Error: soroban CLI is required but not installed."; exit 1; }
+# Fund demo_user account if needed
+echo "🏦 Ensuring demo_user account is funded..."
+soroban keys fund demo_user --network testnet > /dev/null 2>&1 || echo "⚠️  demo_user may already be funded"
 # Step 1: Deploy contract
 echo "📦 Deploying contract..."
 cargo build --target wasm32v1-none --release -p privacy-pools || { echo "❌ Error: Failed to build contract"; exit 1; }
@@ -18,7 +21,7 @@ if [ -z "$VK_HEX" ]; then
     exit 1
 fi
 echo "🚀 Deploying contract to testnet..."
-soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network testnet -- --vk_bytes $VK_HEX || { echo "❌ Error: Failed to deploy contract"; exit 1; }
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network testnet --instructions 6000000 -- --vk_bytes $VK_HEX || { echo "❌ Error: Failed to deploy contract"; exit 1; }
 # Save the contract ID for later use
 echo ""
 echo "📋 Please paste the contract ID from the deployment above:"
