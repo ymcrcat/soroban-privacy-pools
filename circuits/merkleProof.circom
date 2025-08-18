@@ -1,6 +1,6 @@
 pragma circom 2.2.0;
 
-include "keccak256.circom";
+include "poseidon.circom";
 include "comparators.circom";
 include "mux1.circom";
 
@@ -36,7 +36,7 @@ template MerkleProof(maxDepth) {
     component hashes[maxDepth]; // Hash components (can use any hash function)
 
     // implmenentation
-    component depthCheck = LessEqThan(6);
+    component depthCheck = LessEqThan(maxDepth);
     depthCheck.in[0] <== actualDepth;
     depthCheck.in[1] <== maxDepth;
     depthCheck.out === 1;
@@ -56,9 +56,8 @@ template MerkleProof(maxDepth) {
         hashInCorrectOrder[i].s <== indices[i];
         
         // hash the nodes using the specified hash function
-        hashes[i] = Keccak256FieldHash2();
-        hashes[i].in[0] <== hashInCorrectOrder[i].out[0];
-        hashes[i].in[1] <== hashInCorrectOrder[i].out[1];
+        hashes[i] = Poseidon(2);
+        hashes[i].inputs <== hashInCorrectOrder[i].out;
         
         // check if sibling is empty
         siblingIsEmpty[i] = IsZero();

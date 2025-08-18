@@ -1,7 +1,8 @@
 [package]
-name = "circuit-tests"
+name = "merkleproof-tests"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [dependencies]
 lean-imt = { path = "../../lean-imt" }
@@ -10,5 +11,5 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [[bin]]
-name = "test_lean_imt_compatibility"
-path = "test_lean_imt_compatibility.rs"
+name = "lean-imt-test"
+path = "src/main.rs"
