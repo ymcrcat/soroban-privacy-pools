@@ -1,7 +1,8 @@
 use ark_bls12_381::{Fr};
 use ark_ff::PrimeField;
 use rand::{thread_rng, Rng};
-use sha3::{Digest, Keccak256};
+use dusk_poseidon::{Domain, Hash};
+use dusk_bls12_381::BlsScalar;
 use ark_ff::biginteger::BigInteger;
 use serde::Serialize;
 use std::fs::File;
@@ -43,16 +44,35 @@ fn random_fr() -> Fr {
     Fr::from(rng.gen::<u64>())
 }
 
-// Simple keccak256-based hash for field elements
-fn field_hash(inputs: &[Fr]) -> Fr {
-    let mut hasher = Keccak256::new();
-    for input in inputs {
-        hasher.update(&to_bytesn32(input));
-    }
-    let hashed = hasher.finalize();
+// Convert ark-ff Fr to dusk BlsScalar
+fn fr_to_bls_scalar(fr: &Fr) -> BlsScalar {
+    let bytes = fr.into_bigint().to_bytes_le();
+    let mut padded_bytes = [0u8; 32];
+    let copy_len = std::cmp::min(bytes.len(), 32);
+    padded_bytes[..copy_len].copy_from_slice(&bytes[..copy_len]);
+    BlsScalar::from_bytes(&padded_bytes).unwrap_or_else(|| {
+        // Fallback: use wide reduction if canonical form fails
+        let mut wide = [0u8; 64];
+        wide[..copy_len].copy_from_slice(&bytes[..copy_len]);
+        BlsScalar::from_bytes_wide(&wide)
+    })
+}
+
+// Convert dusk BlsScalar to ark-ff Fr
+fn bls_scalar_to_fr(scalar: &BlsScalar) -> Fr {
+    let bytes = scalar.to_bytes();
+    Fr::from_le_bytes_mod_order(&bytes)
+}
+
+// Poseidon-based hash for field elements
+fn poseidon_hash(inputs: &[Fr]) -> Fr {
+    let bls_inputs: Vec<BlsScalar> = inputs.iter().map(fr_to_bls_scalar).collect();
     
-    // Convert the hash to a field element, which will automatically reduce modulo the field size
-    Fr::from_le_bytes_mod_order(&hashed)
+    // Use Domain::Other for general hashing (similar to the contract)
+    let hash_result = Hash::digest(Domain::Other, &bls_inputs);
+    
+    // Convert back to ark-ff Fr
+    bls_scalar_to_fr(&hash_result[0])
 }
 
 fn to_bytesn32(fr: &Fr) -> [u8; 32] {
@@ -64,25 +84,17 @@ fn to_bytesn32(fr: &Fr) -> [u8; 32] {
 }
 
 fn generate_label(scope: &[u8], nonce: &[u8; 32]) -> Fr {
-    let mut hasher = Keccak256::new();
-    hasher.update(scope);
-    hasher.update(nonce);
-    let hashed = hasher.finalize();
+    // Convert scope and nonce to field elements for Poseidon hashing
+    let scope_fr = Fr::from_le_bytes_mod_order(scope);
+    let nonce_fr = Fr::from_le_bytes_mod_order(nonce);
     
-    // Ensure the label fits in 254 bits by masking the highest 2 bits
-    // This prevents potential issues with field arithmetic
-    let mut truncated_hash = [0u8; 32];
-    truncated_hash.copy_from_slice(&hashed);
-    
-    // Clear the highest 2 bits to ensure 254-bit compatibility
-    truncated_hash[31] &= 0x3F; // Clear bits 254 and 255
-    
-    Fr::from_le_bytes_mod_order(&truncated_hash)
+    // Hash using Poseidon
+    poseidon_hash(&[scope_fr, nonce_fr])
 }
 
 fn generate_commitment(value: Fr, label: Fr, nullifier: Fr, secret: Fr) -> Fr {
-    let precommitment = field_hash(&[nullifier, secret]);
-    field_hash(&[value, label, precommitment])
+    let precommitment = poseidon_hash(&[nullifier, secret]);
+    poseidon_hash(&[value, label, precommitment])
 }
 
 fn generate_coin(scope: &[u8]) -> GeneratedCoin {
@@ -107,7 +119,7 @@ fn generate_coin(scope: &[u8]) -> GeneratedCoin {
     }
 }
 
-fn withdraw_coin(existing_coin: &CoinData, scope: &[u8]) -> SnarkInput {
+fn withdraw_coin(existing_coin: &CoinData, _scope: &[u8]) -> SnarkInput {
     
     let existing_value = Fr::from_str(&existing_coin.value).unwrap();
     let existing_nullifier = Fr::from_str(&existing_coin.nullifier).unwrap();
