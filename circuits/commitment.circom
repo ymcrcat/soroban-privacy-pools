@@ -1,25 +1,23 @@
 pragma circom 2.2.0;
 
-include "keccak256.circom";  // Uses standard field-compatible hashing for commitments
+include "poseidon.circom";  // Uses Poseidon hashing for commitments
 
 /**
  * @title CommitmentHasher template
  * @dev Template for generating privacy pool commitments and nullifier hashes
  * 
  * @notice HASH FUNCTION CHOICE:
- *   This template uses the standard field-compatible hash functions:
- *   - Keccak256FieldHash1(): For single field elements (254-bit safe)
- *   - Keccak256FieldHash2(): For two field elements (254-bit safe) 
- *   - Keccak256FieldHash3(): For three field elements (254-bit safe)
+ *   This template uses Poseidon hash functions:
+ *   - Poseidon(1): For single field elements
+ *   - Poseidon(2): For two field elements
+ *   - Poseidon(3): For three field elements
  * 
- *   These are DIFFERENT from the Merkle tree hashing which must use
- *   Keccak256FieldHash2_256() for Soroban compatibility. The commitment
- *   hashing doesn't need Soroban compatibility since commitments are
- *   generated and verified entirely within the circom circuit.
+ *   Poseidon is more efficient for SNARK circuits and provides better
+ *   security properties for zero-knowledge applications.
  * 
  * @notice COMMITMENT STRUCTURE:
- *   commitment = Keccak256(value, label, Keccak256(nullifier, secret))
- *   nullifierHash = Keccak256(nullifier)
+ *   commitment = Poseidon(value, label, Poseidon(nullifier, secret))
+ *   nullifierHash = Poseidon(nullifier)
  */
 template CommitmentHasher() {
     
@@ -33,17 +31,17 @@ template CommitmentHasher() {
     signal output commitment;
     signal output nullifierHash;
 
-    component nullifierHasher = Keccak256FieldHash1();
-    nullifierHasher.in <== nullifier;
+    component nullifierHasher = Poseidon(1);
+    nullifierHasher.inputs[0] <== nullifier;
     
-    component precommitmentHasher = Keccak256FieldHash2();
-    precommitmentHasher.in[0] <== nullifier;
-    precommitmentHasher.in[1] <== secret;
+    component precommitmentHasher = Poseidon(2);
+    precommitmentHasher.inputs[0] <== nullifier;
+    precommitmentHasher.inputs[1] <== secret;
 
-    component commitmentHasher = Keccak256FieldHash3();
-    commitmentHasher.in[0] <== value;
-    commitmentHasher.in[1] <== label;
-    commitmentHasher.in[2] <== precommitmentHasher.out;
+    component commitmentHasher = Poseidon(3);
+    commitmentHasher.inputs[0] <== value;
+    commitmentHasher.inputs[1] <== label;
+    commitmentHasher.inputs[2] <== precommitmentHasher.out;
 
     commitment <== commitmentHasher.out;
     nullifierHash <== nullifierHasher.out;
