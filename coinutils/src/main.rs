@@ -1,8 +1,7 @@
-use ark_bls12_381::{Fr};
+use ark_bls12_381::Fr;
 use ark_ff::PrimeField;
 use rand::{thread_rng, Rng};
-use dusk_poseidon::{Domain, Hash};
-use dusk_bls12_381::BlsScalar;
+use poseidon::Poseidon255;
 use ark_ff::biginteger::BigInteger;
 use serde::Serialize;
 use std::fs::File;
@@ -44,35 +43,22 @@ fn random_fr() -> Fr {
     Fr::from(rng.gen::<u64>())
 }
 
-// Convert ark-ff Fr to dusk BlsScalar
-fn fr_to_bls_scalar(fr: &Fr) -> BlsScalar {
-    let bytes = fr.into_bigint().to_bytes_le();
-    let mut padded_bytes = [0u8; 32];
-    let copy_len = std::cmp::min(bytes.len(), 32);
-    padded_bytes[..copy_len].copy_from_slice(&bytes[..copy_len]);
-    BlsScalar::from_bytes(&padded_bytes).unwrap_or_else(|| {
-        // Fallback: use wide reduction if canonical form fails
-        let mut wide = [0u8; 64];
-        wide[..copy_len].copy_from_slice(&bytes[..copy_len]);
-        BlsScalar::from_bytes_wide(&wide)
-    })
-}
-
-// Convert dusk BlsScalar to ark-ff Fr
-fn bls_scalar_to_fr(scalar: &BlsScalar) -> Fr {
-    let bytes = scalar.to_bytes();
-    Fr::from_le_bytes_mod_order(&bytes)
-}
-
 // Poseidon-based hash for field elements
 fn poseidon_hash(inputs: &[Fr]) -> Fr {
-    let bls_inputs: Vec<BlsScalar> = inputs.iter().map(fr_to_bls_scalar).collect();
+    let poseidon = Poseidon255::new();
     
-    // Use Domain::Other for general hashing (similar to the contract)
-    let hash_result = Hash::digest(Domain::Other, &bls_inputs);
-    
-    // Convert back to ark-ff Fr
-    bls_scalar_to_fr(&hash_result[0])
+    match inputs.len() {
+        1 => poseidon.hash(&inputs[0]),
+        2 => poseidon.hash_two(&inputs[0], &inputs[1]),
+        _ => {
+            // For more than 2 inputs, hash them sequentially
+            let mut result = inputs[0];
+            for input in inputs.iter().skip(1) {
+                result = poseidon.hash_two(&result, input);
+            }
+            result
+        }
+    }
 }
 
 fn to_bytesn32(fr: &Fr) -> [u8; 32] {

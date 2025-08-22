@@ -1,6 +1,6 @@
 pragma circom 2.2.0;
 
-include "poseidon.circom";
+include "poseidon255.circom";
 include "comparators.circom";
 include "mux1.circom";
 
@@ -56,8 +56,8 @@ template MerkleProof(maxDepth) {
         hashInCorrectOrder[i].s <== indices[i];
         
         // hash the nodes using the specified hash function
-        hashes[i] = Poseidon(2);
-        hashes[i].inputs <== hashInCorrectOrder[i].out;
+        hashes[i] = Poseidon255(2);
+        hashes[i].in <== hashInCorrectOrder[i].out;
         
         // check if sibling is empty
         siblingIsEmpty[i] = IsZero();

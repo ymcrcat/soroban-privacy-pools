@@ -1,5 +1,5 @@
 [package]
-name = "lean-imt"
+name = "poseidon"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -12,8 +12,6 @@ doctest = false
 soroban-sdk = { workspace = true }
 ark-bls12-381 = "0.4"
 ark-ff = "0.4"
-num-bigint = "0.4"
-poseidon = { path = "../poseidon" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

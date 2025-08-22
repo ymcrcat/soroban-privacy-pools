@@ -6,7 +6,9 @@ members = [
   "coinutils",
   "zk",
   "lean-imt",
-  "circuits/test"
+  "poseidon",
+  "circuits/test/lean-imt-test",
+  "circuits/test/poseidon-test"
 ]
 
 [workspace.dependencies]
