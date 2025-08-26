@@ -40,7 +40,6 @@ fn scalar_to_bytes(env: &Env, scalar: &BlsScalar) -> BytesN<32> {
 pub struct Poseidon255 {
     round_constants: Vec<BlsScalar>, // Dynamic size based on t and rounds
     mds_matrix: Vec<Vec<BlsScalar>>, // Dynamic size based on t
-    t: usize, // State width parameter
 }
 
 impl Poseidon255 {
@@ -53,7 +52,6 @@ impl Poseidon255 {
         Self {
             round_constants: round_constants.to_vec(),
             mds_matrix: mds_matrix.iter().map(|row| row.to_vec()).collect(),
-            t: 2,
         }
     }
     
@@ -68,7 +66,6 @@ impl Poseidon255 {
         Self {
             round_constants: round_constants.to_vec(),
             mds_matrix: mds_matrix.iter().map(|row| row.to_vec()).collect(),
-            t,
         }
     }
     
