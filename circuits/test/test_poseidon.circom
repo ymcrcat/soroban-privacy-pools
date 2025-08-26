@@ -2,24 +2,27 @@ pragma circom 2.2.0;
 
 include "../poseidon255.circom";
 
-/**
- * @title PoseidonSingle template
- * @dev Template for computing poseidon hash over a single input element
- * @notice This circuit uses the poseidon hash function from circomlib
- */
-template PoseidonSingle() {
+template TestPoseidon() {
     // inputs 
-    signal input in;                    // input value to hash
+    signal input in1;
+    signal input in2;
     
     // outputs
-    signal output out;                  // poseidon hash output
+    signal output out1;
+    signal output out2;
     
     // components
-    component hasher = Poseidon255(1);    // poseidon hash for 1 input
-    
+    component hasher1 = Poseidon255(1);    // poseidon hash for 1 input
+
     // implementation
-    hasher.in[0] <== in;
-    out <== hasher.out;
+    hasher1.in[0] <== in1;
+    out1 <== hasher1.out;
+
+    component hasher2 = Poseidon255(2);    // poseidon hash for 2 inputs
+
+    hasher2.in[0] <== in1;
+    hasher2.in[1] <== in2;
+    out2 <== hasher2.out;
 }
 
-component main { public [in] } = PoseidonSingle();
+component main { public [in1, in2] } = TestPoseidon();

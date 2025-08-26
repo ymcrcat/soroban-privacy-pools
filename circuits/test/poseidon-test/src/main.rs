@@ -7,8 +7,10 @@ use num_bigint::BigUint;
 
 #[derive(Deserialize)]
 struct Input {
-    #[serde(rename = "in")]
-    in_value: serde_json::Value,
+    #[serde(rename = "in1")]
+    in1_value: serde_json::Value,
+    #[serde(rename = "in2")]
+    in2_value: serde_json::Value,
 }
 
 fn bls_scalar_to_decimal(scalar: BlsScalar) -> String {
@@ -33,16 +35,28 @@ fn main() {
     let input_data: Input = serde_json::from_str(&input).expect("Failed to parse JSON");
     
     // Convert to BlsScalar and hash
-    let input_u64 = match input_data.in_value {
+    let input1_u64 = match input_data.in1_value {
         serde_json::Value::String(s) => s.parse::<u64>().expect("Failed to parse string to u64"),
         serde_json::Value::Number(n) => n.as_u64().expect("Failed to get u64 from number"),
-        _ => panic!("Expected string or number for 'in' field"),
+        _ => panic!("Expected string or number for 'in1' field"),
     };
-    let input_scalar = BlsScalar::from(input_u64);
-    let poseidon = Poseidon255::new();
-    let output = poseidon.hash(&input_scalar);
+    let input1_scalar = BlsScalar::from(input1_u64);
     
-    // Output hash as decimal to stdout
-    let decimal_output = bls_scalar_to_decimal(output);
-    println!("{}", decimal_output);
+    let input2_u64 = match input_data.in2_value {
+        serde_json::Value::String(s) => s.parse::<u64>().expect("Failed to parse string to u64"),
+        serde_json::Value::Number(n) => n.as_u64().expect("Failed to get u64 from number"),
+        _ => panic!("Expected string or number for 'in2' field"),
+    };
+    let input2_scalar = BlsScalar::from(input2_u64);
+    
+    let poseidon1 = Poseidon255::new();
+    let output1 = poseidon1.hash(&input1_scalar);
+    let decimal_output1 = bls_scalar_to_decimal(output1);
+
+    let poseidon2 = Poseidon255::new();
+    let output2 = poseidon2.hash_two(&input1_scalar, &input2_scalar);
+    let decimal_output2 = bls_scalar_to_decimal(output2);
+
+    println!("{}", decimal_output1);
+    println!("{}", decimal_output2);
 }
