@@ -4,36 +4,8 @@ extern crate alloc;
 
 use ark_bls12_381::Fr as BlsScalar;
 use ark_ff::{Field, PrimeField};
-use soroban_sdk::{BytesN, Env};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-
-/// Simple conversion from bytes to BlsScalar
-#[inline]
-fn scalar_from_bytes(bytes: &BytesN<32>) -> BlsScalar {
-    let array = bytes.to_array();
-    BlsScalar::from_random_bytes(&array).unwrap_or(BlsScalar::ZERO)
-}
-
-/// Simple conversion from BlsScalar to bytes
-#[inline]
-fn scalar_to_bytes(env: &Env, scalar: &BlsScalar) -> BytesN<32> {
-    let mut bytes = [0u8; 32];
-    
-    // Convert the scalar to its canonical representation
-    // We'll use a simple approach: convert to a u64 and use that as the first 8 bytes
-    // This is deterministic and will produce different outputs for different inputs
-    let scalar_bigint = scalar.into_bigint();
-    let scalar_u64 = scalar_bigint.as_ref()[0];
-    
-    // Use little-endian representation for the first 8 bytes
-    let u64_bytes = scalar_u64.to_le_bytes();
-    for i in 0..8 {
-        bytes[i] = u64_bytes[i];
-    }
-    
-    BytesN::from_array(env, &bytes)
-}
 
 /// Poseidon255 implementation based on the Circom circuit
 /// This implements the same algorithm as poseidon255.circom
@@ -619,22 +591,6 @@ impl Poseidon255 {
     }
 
 
-}
-
-// Public functions for compatibility
-pub fn poseidon1(env: &Env, input: &BytesN<32>) -> BytesN<32> {
-    let a = scalar_from_bytes(input);
-    let poseidon = Poseidon255::new();
-    let h = poseidon.hash(&a);
-    scalar_to_bytes(env, &h)
-}
-
-pub fn poseidon2(env: &Env, left: &BytesN<32>, right: &BytesN<32>) -> BytesN<32> {
-    let a = scalar_from_bytes(left);
-    let b = scalar_from_bytes(right);
-    let poseidon = Poseidon255::new();
-    let h = poseidon.hash_two(&a, &b);
-    scalar_to_bytes(env, &h)
 }
 
 #[cfg(test)]
