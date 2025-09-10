@@ -1,8 +1,7 @@
-use lean_imt::{LeanIMT, bls_scalar_to_bytes};
+use lean_imt::LeanIMT;
 use serde::{Deserialize, Serialize};
 use soroban_sdk::Env;
 use num_bigint::BigUint;
-use ark_ff::PrimeField;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
