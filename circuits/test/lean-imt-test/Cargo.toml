@@ -1,5 +1,5 @@
 [package]
-name = "merkleproof-tests"
+name = "merkle-tree-tests"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -9,7 +9,9 @@ lean-imt = { path = "../../../lean-imt" }
 soroban-sdk = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-hex = "0.4"
+num-bigint = "0.4.6"
+ark-ff = "0.4"
+ark-bls12-381 = "0.4"
 
 [[bin]]
 name = "lean-imt-test"

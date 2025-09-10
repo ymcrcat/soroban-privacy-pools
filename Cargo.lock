@@ -935,11 +935,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8452105ba047068f40ff7093dd1d9da90898e63dd61736462e9cdda6a90ad3c3"
 
 [[package]]
-name = "merkleproof-tests"
+name = "merkle-tree-tests"
 version = "0.1.0"
 dependencies = [
- "hex",
+ "ark-bls12-381",
+ "ark-ff",
  "lean-imt",
+ "num-bigint",
  "serde",
  "serde_json",
  "soroban-sdk",
@@ -1050,6 +1052,7 @@ dependencies = [
  "poseidon",
  "serde",
  "serde_json",
+ "soroban-sdk",
 ]
 
 [[package]]
