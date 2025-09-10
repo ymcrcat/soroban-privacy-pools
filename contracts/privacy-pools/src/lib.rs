@@ -42,7 +42,7 @@ impl PrivacyPoolsContract {
         env.storage().instance().set(&VK_KEY, &vk_bytes);
         
         // Initialize empty merkle tree
-        let tree = LeanIMT::new(env.clone());
+        let tree = LeanIMT::new(env);
         let (leaves, depth, root) = tree.to_storage();
         env.storage().instance().set(&TREE_LEAVES_KEY, &leaves);
         env.storage().instance().set(&TREE_DEPTH_KEY, &depth);
@@ -67,7 +67,7 @@ impl PrivacyPoolsContract {
             .unwrap_or(BytesN::from_array(&env, &[0u8; 32]));
         
         // Create tree and insert new commitment
-        let mut tree = LeanIMT::from_storage(env.clone(), leaves, depth, root);
+        let mut tree = LeanIMT::from_storage(env, leaves, depth, root);
         tree.insert(commitment);
         
         // Get the leaf index (it's the last leaf in the tree)
