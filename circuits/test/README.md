@@ -199,3 +199,115 @@ To add new test cases:
 - These are test circuits, not production circuits
 - Always verify proofs in production environments
 - Test edge cases thoroughly before deployment
+
+## Poseidon Compatibility Test
+
+This directory also contains a compatibility test for the `poseidon255.circom` circuit, which verifies that the Rust `poseidon` crate produces identical hash outputs to the Circom implementation.
+
+### Overview
+
+The Poseidon compatibility test ensures consistency between:
+1. **Rust Implementation**: `poseidon` crate with `Poseidon255` implementation
+2. **Circom Implementation**: `poseidon255.circom` circuit
+
+This is crucial for maintaining consistency between the Rust implementation (used in the main application) and the Circom implementation (used in zero-knowledge proofs).
+
+### Test Files
+
+#### 1. `test/test_poseidon.circom`
+The main test circuit that includes:
+- `TestPoseidon`: Tests both single and two-input hashing
+- **Input signals**: `in1`, `in2`
+- **Output signals**: `out1` (single input hash), `out2` (two input hash)
+- **Components**: 
+  - `Poseidon255(1)` for single input hashing
+  - `Poseidon255(2)` for two input hashing
+
+#### 2. `test/poseidon-test/`
+Rust test implementation that:
+- Uses the `poseidon` crate with `Poseidon255` implementation
+- Takes JSON input with two values: `in1` and `in2`
+- Computes the same hashes as the circuit
+
+#### 3. `test/test_poseidon_input.json`
+Test input data:
+```json
+{
+    "in1": "123456789",
+    "in2": "0"
+}
+```
+
+### Running the Poseidon Compatibility Test
+
+#### Prerequisites
+- Rust toolchain (cargo)
+- Node.js and npm
+- circom compiler
+- snarkjs
+
+#### Step 1: Generate Witness from Rust Implementation
+```bash
+cd circuits/test
+cat test_poseidon_input.json | cargo run --bin test_poseidon --manifest-path poseidon-test/Cargo.toml
+```
+
+**Expected Output:**
+```
+49771379518533783451081444171936304251693849153677701053778138403868110038125
+2595333311380081774082696984545715941782212075692277571540746075566179600420
+```
+
+#### Step 2: Generate Witness from Circom Circuit
+```bash
+cd circuits/build/test_poseidon_js
+node generate_witness.js test_poseidon.wasm ../../test/test_poseidon_input.json ../../test/test_poseidon_new.wtns
+```
+
+#### Step 3: Extract Witness Outputs
+```bash
+cd ../../test
+snarkjs wtns export json test_poseidon_new.wtns
+```
+
+#### Step 4: Verify Compatibility
+Compare the outputs from both implementations:
+
+| Hash Type | Rust Output | Circom Output | Status |
+|-----------|-------------|---------------|---------|
+| Single Input (`in1`) | `49771379518533783451081444171936304251693849153677701053778138403868110038125` | `49771379518533783451081444171936304251693849153677701053778138403868110038125` | ✅ **MATCH** |
+| Two Inputs (`in1`, `in2`) | `2595333311380081774082696984545715941782212075692277571540746075566179600420` | `2595333311380081774082696984545715941782212075692277571540746075566179600420` | ✅ **MATCH** |
+
+### Test Circuit Structure
+
+The `test_poseidon.circom` circuit:
+- **Input signals**: `in1`, `in2`
+- **Output signals**: `out1`, `out2`
+- **Public signals**: All inputs and outputs are public for testing purposes
+- **Hash functions**: Uses the same Poseidon255 parameters as the Rust implementation
+
+### Key Benefits
+
+1. **Cross-Implementation Verification**: Ensures Rust and Circom implementations produce identical results
+2. **Cryptographic Consistency**: Validates that both implementations use the same parameters and algorithms
+3. **Integration Testing**: Provides confidence that the two codebases can work together seamlessly
+4. **Regression Prevention**: Catches any divergence between implementations during development
+
+### Technical Details
+
+- **Field**: Both implementations use the BLS12-381 scalar field
+- **Hash Function**: Poseidon255 with identical constants and parameters
+- **Input Processing**: Both handle the same input format and validation
+- **Output Format**: Both produce field elements in the same representation
+
+### Troubleshooting Poseidon Tests
+
+#### Common Issues
+1. **Compilation Errors**: Ensure circom and circomlib are properly installed
+2. **Witness Generation Errors**: Check that input JSON matches the expected format
+3. **Mismatched Outputs**: Verify that both implementations use the same Poseidon parameters
+
+#### Debugging
+- Use the generated witness files to verify outputs manually
+- Check that both implementations use the same field arithmetic
+- Verify Poseidon constants are identical between implementations

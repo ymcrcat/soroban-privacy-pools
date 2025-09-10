@@ -1,5 +1,5 @@
 use ark_bls12_381::Fr as BlsScalar;
-use ark_ff::{Field, PrimeField};
+use ark_ff::PrimeField;
 use poseidon::Poseidon255;
 use serde::Deserialize;
 use std::io::{self, Read};
@@ -35,19 +35,49 @@ fn main() {
     let input_data: Input = serde_json::from_str(&input).expect("Failed to parse JSON");
     
     // Convert to BlsScalar and hash
-    let input1_u64 = match input_data.in1_value {
-        serde_json::Value::String(s) => s.parse::<u64>().expect("Failed to parse string to u64"),
-        serde_json::Value::Number(n) => n.as_u64().expect("Failed to get u64 from number"),
+    let input1_scalar = match input_data.in1_value {
+        serde_json::Value::String(s) => {
+            // Parse the large number as a BigUint first
+            let big_num = BigUint::parse_bytes(s.as_bytes(), 10)
+                .expect("Failed to parse string to BigUint");
+            // Convert BigUint to BlsScalar
+            BlsScalar::from_be_bytes_mod_order(&big_num.to_bytes_be())
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(u64_val) = n.as_u64() {
+                BlsScalar::from(u64_val)
+            } else {
+                // For numbers too large for u64
+                let s = n.to_string();
+                let big_num = BigUint::parse_bytes(s.as_bytes(), 10)
+                    .expect("Failed to parse number to BigUint");
+                BlsScalar::from_be_bytes_mod_order(&big_num.to_bytes_be())
+            }
+        },
         _ => panic!("Expected string or number for 'in1' field"),
     };
-    let input1_scalar = BlsScalar::from(input1_u64);
     
-    let input2_u64 = match input_data.in2_value {
-        serde_json::Value::String(s) => s.parse::<u64>().expect("Failed to parse string to u64"),
-        serde_json::Value::Number(n) => n.as_u64().expect("Failed to get u64 from number"),
+    let input2_scalar = match input_data.in2_value {
+        serde_json::Value::String(s) => {
+            // Parse the large number as a BigUint first
+            let big_num = BigUint::parse_bytes(s.as_bytes(), 10)
+                .expect("Failed to parse string to BigUint");
+            // Convert BigUint to BlsScalar
+            BlsScalar::from_be_bytes_mod_order(&big_num.to_bytes_be())
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(u64_val) = n.as_u64() {
+                BlsScalar::from(u64_val)
+            } else {
+                // For numbers too large for u64
+                let s = n.to_string();
+                let big_num = BigUint::parse_bytes(s.as_bytes(), 10)
+                    .expect("Failed to parse number to BigUint");
+                BlsScalar::from_be_bytes_mod_order(&big_num.to_bytes_be())
+            }
+        },
         _ => panic!("Expected string or number for 'in2' field"),
     };
-    let input2_scalar = BlsScalar::from(input2_u64);
     
     let poseidon1 = Poseidon255::new();
     let output1 = poseidon1.hash(&input1_scalar);
