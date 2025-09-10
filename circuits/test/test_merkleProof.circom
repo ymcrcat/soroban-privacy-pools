@@ -16,7 +16,7 @@ template TestMerkleProof(maxDepth) {
     signal input actualDepth;           // current tree depth
 
     // outputs
-    signal output out;             // root hash (256-bit array)
+    signal output out;             // field element
     
     // Instantiate the MerkleProof template
     component merkleProof = MerkleProof(maxDepth);
@@ -30,4 +30,4 @@ template TestMerkleProof(maxDepth) {
 }
 
 // Main component for testing
-component main {public [leaf, leafIndex, actualDepth]} = TestMerkleProof(4);
+component main {public [leaf, leafIndex, siblings, actualDepth]} = TestMerkleProof(2);
