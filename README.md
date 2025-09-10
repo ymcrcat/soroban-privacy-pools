@@ -1,5 +1,9 @@
 # Soroban Privacy Pools
 
+> **Warning**: This project is currently a work in progress and is under active development. It does not yet constitute a secure or functional system. Features and APIs may change.
+
+
+
 A privacy-preserving transaction system built on Stellar using Soroban smart contracts and zero-knowledge proofs (zkSNARKs). This project implements privacy pools that allow users to deposit and withdraw tokens while maintaining transaction privacy through cryptographic commitments and Merkle tree inclusion proofs.
 
 ## Features
