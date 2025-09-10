@@ -58,13 +58,8 @@ template MerkleProof(maxDepth) {
         // hash the nodes using the specified hash function
         hashes[i] = Poseidon255(2);
         hashes[i].in <== hashInCorrectOrder[i].out;
-        
-        // check if sibling is empty
-        siblingIsEmpty[i] = IsZero();
-        siblingIsEmpty[i].in <== siblings[i];
 
-        // either keep the previous hash or the new one
-        nodes[i + 1] <== (nodes[i] - hashes[i].out) * siblingIsEmpty[i].out + hashes[i].out;
+        nodes[i + 1] <== hashes[i].out;
     }
 
     out <== nodes[maxDepth];
