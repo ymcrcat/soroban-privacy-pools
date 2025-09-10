@@ -1,154 +1,157 @@
-use lean_imt::LeanIMT;
+use lean_imt::{LeanIMT, bls_scalar_to_bytes};
 use serde::{Deserialize, Serialize};
-use soroban_sdk::{BytesN, Env};
+use soroban_sdk::Env;
+use num_bigint::BigUint;
+use ark_ff::PrimeField;
 
 #[derive(Serialize, Deserialize, Debug)]
-struct PoseidonTestResult {
-    input: u64,
-    input_hex: String,
-    lean_imt_hash: String,
-    description: String,
+#[allow(non_snake_case)]
+struct MerkleProofResult {
+    leaf: String,
+    leafIndex: u32,
+    siblings: Vec<String>,
+    actualDepth: u32,
+    root: String,
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     
-    if args.len() > 1 && args[1] == "poseidon" {
-        // Poseidon hash mode - testing single input hashing
-        if args.len() < 3 {
-            println!("Usage: cargo run -- poseidon <input_value>");
-            println!("Example: cargo run -- poseidon 123456789");
-            return;
+    if args.len() >= 6 {
+        // Proof mode - compute merkle proof for specific leaf
+        let mut leaves = Vec::new();
+        for i in 1..5 {
+            let leaf_value = args[i].parse().unwrap_or(0);
+            leaves.push(leaf_value);
         }
         
-        let input_value = args[2].parse().unwrap_or(123456789);
-        println!("🧪 Testing Poseidon single input hash compatibility");
+        let leaf_index: u32 = args[5].parse().unwrap_or(0);
+        
+        println!("🧪 Computing Merkle Proof for Leaf Index {}", leaf_index);
         println!("================================================");
-        println!("Testing compatibility between lean-imt and test_poseidon.circom");
+        println!("Testing merkle proof generation with lean-imt");
         println!("");
         
         let env = Env::default();
-        let input_bytes = u64_to_bytes32(&env, input_value);
+        let proof_result = compute_merkle_proof(&env, &leaves, leaf_index);
         
-        // Test lean-imt poseidon hash functionality for single input
-        println!("Input value: {}", input_value);
-        println!("Input bytes: 0x{}", hex::encode(&input_bytes.to_array()));
+        println!("Leaf index: {}", proof_result.leafIndex);
+        println!("Leaf value: {}", leaves[leaf_index as usize]);
+        // Convert siblings to decimal for display
+        let siblings_decimal_display: Vec<String> = proof_result.siblings.iter()
+            .enumerate()
+            .map(|(i, sibling_decimal)| {
+                if i == 0 {
+                    // First sibling is the other leaf at the same level
+                    let sibling_leaf_index = if leaf_index < 2 {
+                        if leaf_index == 0 { 1 } else { 0 }
+                    } else {
+                        if leaf_index == 2 { 3 } else { 2 }
+                    };
+                    leaves[sibling_leaf_index].to_string()
+                } else {
+                    // Second sibling is already a decimal string
+                    sibling_decimal.to_string()
+                }
+            })
+            .collect();
+        println!("Siblings: {:?}", siblings_decimal_display);
+        println!("Actual depth: {}", proof_result.actualDepth);
+        println!("Merkle root: {}", proof_result.root);
         
-        // Create a single leaf tree to test the poseidon hash
-        let mut test_tree = LeanIMT::new(env.clone());
-        test_tree.insert(input_bytes.clone());
+        // Save circuit-compatible input with decimal string representations
+        let leaf_decimal = leaves[leaf_index as usize].to_string();
         
-        let root = test_tree.get_root();
-        let root_hex = format!("0x{}", hex::encode(&root.to_array()));
+        // The siblings are already in decimal format, so we can use them directly
+        let siblings_decimal = proof_result.siblings.clone();
         
-        println!("lean-imt Poseidon hash result: {}", root_hex);
-        println!("Tree depth: {}", test_tree.get_depth());
-        println!("Leaf count: {}", test_tree.get_leaf_count());
-        
-        // Save result for circuit compatibility testing
-        let result = PoseidonTestResult {
-            input: input_value,
-            input_hex: format!("0x{}", hex::encode(&input_bytes.to_array())),
-            lean_imt_hash: root_hex.clone(),
-            description: "Single input Poseidon hash test".to_string(),
+        let circuit_input = CircuitInput {
+            leaf: leaf_decimal,
+            leafIndex: proof_result.leafIndex,
+            siblings: siblings_decimal,
+            actualDepth: proof_result.actualDepth,
         };
-        
-        let json_result = serde_json::to_string_pretty(&result).unwrap();
-        std::fs::write("poseidon_single_result.json", json_result).unwrap();
-        println!("📁 Result saved to: poseidon_single_result.json");
-        
-        println!("");
-        println!("🎯 This result can now be used to test compatibility with test_poseidon.circom");
-        println!("   The circuit should produce the same hash output for the same input value.");
-        println!("   Input: {} -> Expected Hash: {}", input_value, root_hex);
+        let circuit_json = serde_json::to_string_pretty(&circuit_input).unwrap();
+        std::fs::write("circuit_input.json", circuit_json).unwrap();
+        println!("📁 Circuit input saved to: circuit_input.json");
         
         return;
     }
     
-    // Default mode - run comprehensive Poseidon single input tests
-    println!("🧪 Testing Poseidon single input hash compatibility");
-    println!("================================================");
-    println!("Testing compatibility between lean-imt and test_poseidon.circom");
-    println!("");
-
-    let env = Env::default();
-    let mut results = Vec::new();
-
-    // Test Case 1: Simple single input
-    println!("Test Case 1: Single input value 42");
-    let mut tree1 = LeanIMT::new(env.clone());
-    tree1.insert(u64_to_bytes32(&env, 42));
-    
-    let root1 = tree1.get_root();
-    let root1_hex = format!("0x{}", hex::encode(&root1.to_array()));
-    
-    println!("  Input: 42");
-    println!("  lean-imt Hash: {}", root1_hex);
-    
-    let result1 = PoseidonTestResult {
-        input: 42,
-        input_hex: format!("0x{}", hex::encode(&u64_to_bytes32(&env, 42).to_array())),
-        lean_imt_hash: root1_hex.clone(),
-        description: "Test Case 1: Single input value 42".to_string(),
-    };
-    results.push(result1);
-
-    // Test Case 2: Another single input
-    println!("\nTest Case 2: Single input value 123456789");
-    let mut tree2 = LeanIMT::new(env.clone());
-    tree2.insert(u64_to_bytes32(&env, 123456789));
-    
-    let root2 = tree2.get_root();
-    let root2_hex = format!("0x{}", hex::encode(&root2.to_array()));
-    
-    println!("  Input: 123456789");
-    println!("  lean-imt Hash: {}", root2_hex);
-    
-    let result2 = PoseidonTestResult {
-        input: 123456789,
-        input_hex: format!("0x{}", hex::encode(&u64_to_bytes32(&env, 123456789).to_array())),
-        lean_imt_hash: root2_hex.clone(),
-        description: "Test Case 2: Single input value 123456789".to_string(),
-    };
-    results.push(result2);
-
-    // Test Case 3: Zero input
-    println!("\nTest Case 3: Single input value 0");
-    let mut tree3 = LeanIMT::new(env.clone());
-    tree3.insert(u64_to_bytes32(&env, 0));
-    
-    let root3 = tree3.get_root();
-    let root3_hex = format!("0x{}", hex::encode(&root3.to_array()));
-    
-    println!("  Input: 0");
-    println!("  lean-imt Hash: {}", root3_hex);
-    
-    let result3 = PoseidonTestResult {
-        input: 0,
-        input_hex: format!("0x{}", hex::encode(&u64_to_bytes32(&env, 0).to_array())),
-        lean_imt_hash: root3_hex.clone(),
-        description: "Test Case 3: Single input value 0".to_string(),
-    };
-    results.push(result3);
-    
-    // Save results to JSON
-    let json_output = serde_json::to_string_pretty(&results).unwrap();
-    std::fs::write("poseidon_single_result.json", json_output).unwrap();
-    
-    println!("\n✅ Poseidon single input hash testing complete!");
-    println!("📁 Results saved to: poseidon_single_result.json");
-    println!("\n🎯 These results can now be used to test compatibility with test_poseidon.circom");
-    println!("   Each test case provides:");
-    println!("   - Input value (decimal)");
-    println!("   - Input value (hex bytes)");
-    println!("   - Expected hash output from lean-imt");
-    println!("   - The circuit should produce matching hash outputs");
+    // Show usage if no valid arguments provided
+    println!("🧪 Lean-IMT Test Suite");
+    println!("======================");
+    println!("Usage:");
+    println!("   cargo run -- <leaf1> <leaf2> <leaf3> <leaf4> <leaf_index>");
+    println!("\nExample:");
+    println!("   cargo run -- 0 0 0 0 0");
 }
 
-fn u64_to_bytes32(env: &Env, value: u64) -> BytesN<32> {
-    let mut bytes = [0u8; 32];
-    bytes[0..8].copy_from_slice(&value.to_le_bytes());
-    BytesN::from_array(env, &bytes)
+fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerkleProofResult {
+    // Create a new LeanIMT instance
+    let mut tree = LeanIMT::new(env);
+    
+    for &leaf in leaves {
+        tree.insert_u64(leaf);
+    }
+    
+    // Generate the merkle proof for the specified leaf index
+    let proof = tree.generate_proof(leaf_index).expect("Failed to generate proof");
+    let (siblings, actual_depth) = proof;
+    
+    // Get the leaf value using the new scalar-based method
+    let leaf_scalar = tree.get_leaf_scalar(leaf_index as usize).expect("Leaf not found");
+    let leaf_value_decimal = leaf_scalar.to_string();
+    
+    // Convert siblings to decimal strings, but filter out the root (last element)
+    // The circuit should compute the root itself, not receive it as input
+    let mut siblings_decimal = Vec::new();
+    let siblings_count = siblings.len();
+    let siblings_to_process = if siblings_count > actual_depth {
+        // Remove the last element (root) if it was included
+        actual_depth
+    } else {
+        siblings_count
+    };
+    
+    for i in 0..siblings_to_process {
+        let sibling = siblings.get(i).unwrap();
+        if i == 0 {
+            // First sibling is the other leaf at the same level
+            // For leaf 0: sibling is leaf 1, for leaf 1: sibling is leaf 0
+            // For leaf 2: sibling is leaf 3, for leaf 3: sibling is leaf 2
+            let sibling_leaf_index = if leaf_index < 2 {
+                if leaf_index == 0 { 1 } else { 0 }
+            } else {
+                if leaf_index == 2 { 3 } else { 2 }
+            };
+            siblings_decimal.push(leaves[sibling_leaf_index].to_string());
+        } else {
+            // Second sibling is a hash value - convert bytes directly to decimal
+            let decimal_value = BigUint::from_bytes_be(&sibling.to_array());
+            siblings_decimal.push(decimal_value.to_string());
+        }
+    }
+    
+    // Get the merkle root for display
+    let root_scalar = tree.get_root_scalar();
+    let root_decimal = root_scalar.to_string();
+    
+    MerkleProofResult {
+        leaf: leaf_value_decimal,
+        leafIndex: leaf_index,
+        siblings: siblings_decimal,
+        actualDepth: actual_depth,
+        root: root_decimal,
+    }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[allow(non_snake_case)]
+struct CircuitInput {
+    leaf: String,
+    leafIndex: u32,
+    siblings: Vec<String>,
+    actualDepth: u32,
+}
 
