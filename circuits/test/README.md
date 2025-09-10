@@ -1,204 +1,109 @@
-# MerkleProof Circuit Test Suite
+# Circuits Test Suite
 
-This directory contains comprehensive tests for the `merkleProof.circom` circuit, which implements a Lean Incremental Merkle Tree proof verification system.
+This directory contains compatiblity tests for Poseidon hash and Merkle-Tree implementations in Rust and Circom.
 
-## Overview
+## Lean-IMT Compatibility Test
 
-The `merkleProof.circom` circuit verifies that a given leaf exists in a merkle tree by checking the provided merkle proof. It follows the LeanIMT design principles:
+This directory contains a compatibility test that verifies the `merkleProof.circom` circuit works correctly with the Lean-IMT (Lean Incremental Merkle Tree) implementation from the Rust codebase.
 
-1. Every node with two children is the hash of its left and right nodes
-2. Every node with one child has the same value as its child node
-3. Tree is always built from leaves to root
-4. Tree is always balanced by construction
-5. Tree depth is dynamic and can increase with insertion of new leaves
+### Overview
 
-## Test Files
+The Lean-IMT compatibility test ensures consistency between:
+1. **Rust Implementation**: `lean-imt` crate with LeanIMT implementation
+2. **Circom Implementation**: `merkleProof.circom` circuit
 
-### 1. `test/test_merkleProof.circom`
-The main test circuit file that includes multiple test templates:
-- `MerkleProofTest`: Full test with depth 4
-- `MerkleProofSimpleTest`: Simple test with depth 2
-- `MerkleProofEdgeCaseTest`: Edge case tests with depth 3
+This is crucial for maintaining consistency between the Rust implementation (used in the main application) and the Circom implementation (used in zero-knowledge proofs).
 
-### 2. `test/test_merkleProof.js`
-JavaScript test data generator that creates various test scenarios:
-- Test 1: 2-leaf tree (depth 1)
-- Test 2: 4-leaf tree (depth 2)
-- Test 3: 8-leaf tree (depth 3)
-- Test 4: Single leaf (depth 0)
-- Test 5: Leftmost leaf in 8-leaf tree
+### Test Files
 
-### 3. `package.json`
-Dependencies and scripts for running the tests.
+#### 1. `test/test_merkleProof.circom`
+The main test circuit that includes:
+- `TestMerkleProof`: Tests merkle proof verification with configurable depth
+- **Input signals**: `leaf`, `leafIndex`, `siblings`, `actualDepth`
+- **Output signals**: `out` (computed merkle root)
+- **Components**: 
+  - `MerkleProof(maxDepth)` for merkle proof verification
+  - Uses depth 2 for the main test component
 
-## Test Scenarios
+#### 2. `test/lean-imt-test/`
+Rust test implementation that:
+- Uses the `lean-imt` crate with LeanIMT implementation
+- Generates test data and merkle proofs
+- Outputs a `circuit_input.json` file with test data
 
-### Basic Functionality Tests
-- **Valid Proofs**: Tests that correctly constructed merkle proofs are accepted
-- **Different Tree Depths**: Tests trees of various depths (0, 1, 2, 3)
-- **Leaf Positions**: Tests leaves at different positions in the tree
+### Running the Lean-IMT Compatibility Test
 
-### Edge Cases
-- **Single Leaf Trees**: Trees with only one leaf (depth 0)
-- **Unbalanced Trees**: Trees where some levels have odd numbers of nodes
-- **Empty Siblings**: Handles cases where sibling nodes are empty (value 0)
-
-### Negative Test Cases (Should Fail)
-- **Invalid Siblings**: Tests with incorrect sibling values that should cause witness generation to fail
-- **Wrong Leaf Index**: Tests with incorrect leaf indices that should violate circuit constraints
-- **Wrong Depth**: Tests with incorrect tree depth that should cause constraint violations
-- **Wrong Expected Root**: Tests with incorrect expected root values that should fail verification
-
-### Error Cases (Implicit)
-- **Invalid Proofs**: The circuit will fail if provided with incorrect sibling values
-- **Depth Mismatch**: The circuit enforces that actual depth ≤ max depth
-- **Index Validation**: Leaf index must be valid for the given tree structure
-
-## Getting Started
-
-### Prerequisites
-- Node.js (v14 or higher)
+#### Prerequisites
+- Rust toolchain (cargo)
 - circom compiler
-- circomlib (for standard components)
+- snarkjs
 
-### Installation
+#### Step 1: Generate Test Data from Rust Implementation
 ```bash
-cd circuits
-npm install
+cd circuits/test
+cargo run --bin lean-imt-test --manifest-path lean-imt-test/Cargo.toml
 ```
 
-### Running Tests
+This will generate a `circuit_input.json` file with test data including:
+- `leaf`: The leaf value to prove inclusion of
+- `leafIndex`: Index of the leaf in the Merkle tree
+- `siblings`: Array of sibling values along the path to root
+- `actualDepth`: Current tree depth
 
-#### 1. Generate Test Data
+#### Step 2: Compile the Test Circuit
 ```bash
-npm run test
+cd ../../
+circom circuits/test/test_merkleProof.circom --r1cs --wasm --sym --c -o circuits/build/
 ```
-This will generate test data and save it to JSON files.
 
-#### 2. Compile Test Circuit
+#### Step 3: Generate Witness from Circom Circuit
 ```bash
-npm run compile
+cd circuits/build/test_merkleProof_js
+node generate_witness.js test_merkleProof.wasm ../../test/circuit_input.json ../../test/test_merkleProof.wtns
 ```
-This compiles the test circuit to R1CS, WASM, and symbol files.
 
-#### 3. Generate Witness
+#### Step 4: Extract Witness Outputs
 ```bash
-npm run generate-witness
-```
-This generates a witness file from the test inputs.
-
-## Test Data Structure
-
-Each test case contains:
-```json
-{
-  "leaf": <leaf_value>,
-  "leafIndex": <index_in_tree>,
-  "siblings": [<sibling_values>],
-  "actualDepth": <tree_depth>,
-  "expectedRoot": <computed_root>
-}
+cd ../../test
+snarkjs wtns export json test_merkleProof.wtns
 ```
 
-## Understanding the Tests
+#### Step 5: Verify Compatibility
+Compare the computed root from the circuit with the expected root from the Rust implementation. The outputs should match, confirming that both implementations produce identical merkle proof verification results.
 
-### Test 1: 2-leaf Tree
-```
-     Root
-    /    \
-  Hash   Hash
- /        \
-1          2
-```
-- Tests basic hashing of two leaves
-- Depth: 1
-- Siblings: [2] (for leaf 1)
+### Test Circuit Structure
 
-### Test 2: 4-leaf Tree
-```
-        Root
-       /    \
-    Hash    Hash
-   /    \   /    \
-  1     2  3      4
-```
-- Tests balanced tree with 4 leaves
-- Depth: 2
-- Siblings: [2, Hash(3,4)] (for leaf 1)
+The `test_merkleProof.circom` circuit:
+- **Input signals**: `leaf`, `leafIndex`, `siblings`, `actualDepth`
+- **Output signals**: `out` (computed merkle root)
+- **Public signals**: All inputs and outputs are public for testing purposes
+- **Merkle proof verification**: Uses the same hashing and verification logic as the Rust implementation
 
-### Test 3: 8-leaf Tree
-```
-            Root
-           /    \
-      Hash      Hash
-     /    \     /    \
-   Hash  Hash Hash  Hash
-  /  \   /  \ /  \   /  \
-  1  2  3  4 5  6  7  8
-```
-- Tests larger tree with 8 leaves
-- Depth: 3
-- Complex sibling path calculations
+### Key Benefits
 
-## Circuit Verification
+1. **Cross-Implementation Verification**: Ensures Rust and Circom implementations produce identical merkle proof verification results
+2. **Cryptographic Consistency**: Validates that both implementations use the same hashing algorithms and tree construction
+3. **Integration Testing**: Provides confidence that the two codebases can work together seamlessly
+4. **Regression Prevention**: Catches any divergence between implementations during development
 
-The test circuit verifies that:
-1. The merkle proof is correctly computed
-2. The output matches the expected root
-3. All constraints are satisfied
+### Technical Details
 
-## Negative Testing
+- **Hash Function**: Both implementations use Poseidon255 for hashing
+- **Tree Structure**: Both follow the LeanIMT design principles
+- **Proof Format**: Both handle the same merkle proof structure and validation
+- **Output Format**: Both produce field elements in the same representation
 
-The test suite includes negative test cases that verify the circuit properly rejects invalid proofs:
+### Troubleshooting Lean-IMT Tests
 
-### How Negative Tests Work
-1. **Generate Valid Proofs**: First, create mathematically correct merkle proofs
-2. **Corrupt the Proofs**: Intentionally modify specific values to make proofs invalid
-3. **Test Failure**: Verify that witness generation fails for invalid proofs
-4. **Circuit Security**: Ensure the circuit cannot be tricked with incorrect data
-
-### Types of Invalid Proofs Tested
-- **Wrong Sibling Values**: Incorrect sibling hashes that don't match the tree structure
-- **Wrong Leaf Index**: Leaf index that doesn't correspond to the provided siblings
-- **Wrong Tree Depth**: Depth value that doesn't match the actual tree structure
-- **Wrong Expected Root**: Expected root that doesn't match the computed root
-
-### Expected Behavior
-- ✅ **Valid Proofs**: Should generate witnesses successfully
-- ❌ **Invalid Proofs**: Should fail witness generation with constraint violations
-- 🔒 **Security**: Circuit should be impossible to satisfy with incorrect data
-
-## Troubleshooting
-
-### Common Issues
+#### Common Issues
 1. **Compilation Errors**: Ensure circom and circomlib are properly installed
-2. **Witness Generation Errors**: Check that input JSON matches the expected format
-3. **Constraint Violations**: Verify that test data is mathematically correct
+2. **Witness Generation Errors**: Check that the generated `circuit_input.json` matches the expected format
+3. **Mismatched Outputs**: Verify that both implementations use the same hashing algorithms
 
-### Debugging
-- Use the generated JSON files to verify test data manually
-- Check that sibling values are correctly computed
-- Verify tree depth calculations
-
-## Extending the Tests
-
-To add new test cases:
-1. Add a new test method in `test_merkleProof.js`
-2. Generate appropriate test data
-3. Add the test to the `generateAllTests()` method
-4. Update the main function to include the new test
-
-## Performance Considerations
-
-- Test with small tree depths first (≤ 4)
-- Larger trees require more computation time
-- Consider using different prime fields for testing vs production
-
-## Security Notes
-
-- These are test circuits, not production circuits
-- Always verify proofs in production environments
-- Test edge cases thoroughly before deployment
+#### Debugging
+- Use the generated witness files to verify outputs manually
+- Check that both implementations use the same field arithmetic
+- Verify that the merkle proof structure is consistent between implementations
 
 ## Poseidon Compatibility Test
 
