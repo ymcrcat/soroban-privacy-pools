@@ -12,9 +12,9 @@ template Dummy() {
     // Inputs
     signal input withdrawnValue;
     signal input label;                 // keccak256(scope, nonce) % SNARK_SCALAR_FIELD
-    signal input existingValue;         // value of the existing commitment
-    signal input existingNullifier;     // nullifier of the existing commitment
-    signal input existingSecret;        // Secret of the existing commitment
+    signal input value;         // value of the existing commitment
+    signal input nullifier;     // nullifier of the existing commitment
+    signal input secret;        // Secret of the existing commitment
 
     // Outputs
     signal output existingNullifierHash;    // hash of existing commitment nullifier
@@ -24,14 +24,14 @@ template Dummy() {
     component commitmentHasher = CommitmentHasher();
     commitmentHasher.value <== withdrawnValue;
     commitmentHasher.label <== label;
-    commitmentHasher.secret <== existingSecret;
-    commitmentHasher.nullifier <== existingNullifier;
+    commitmentHasher.secret <== secret;
+    commitmentHasher.nullifier <== nullifier;
 
     signal existingCommitment <== commitmentHasher.commitment;
     existingNullifierHash <== commitmentHasher.nullifierHash;
 
     // check the withdrawn value is valid
-    signal remainingValue <== existingValue - withdrawnValue;
+    signal remainingValue <== value - withdrawnValue;
     component remainingValueRangeCheck = Num2Bits(128);
     remainingValueRangeCheck.in <== remainingValue;
     _ <== remainingValueRangeCheck.out;
