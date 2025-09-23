@@ -23,7 +23,6 @@ The LeanIMT follows these key design principles:
 - **Proof Generation**: Generate merkle inclusion proofs for any leaf
 - **Soroban Compatible**: Designed specifically for Stellar's Soroban smart contract platform
 - **Circuit Compatible**: Matches the behavior expected by `merkleProof.circom`
-- **Keccak256 Hashing**: Uses the same hash function as the contract for consistency
 
 ## Usage
 
@@ -99,7 +98,7 @@ let tree = LeanIMT::from_storage(env.clone(), leaves, depth, root);
 
 ## Hash Function
 
-The LeanIMT uses **Keccak256** as its hash function, which provides:
+The LeanIMT uses **Poseidon2** as its hash function, which provides:
 
 - **Consistency**: Same hash function used in the contract and circuit
 - **Security**: Cryptographically secure hash function
@@ -114,7 +113,7 @@ The LeanIMT implementation is designed to be fully compatible with the `merklePr
 
 - **Proof Format**: The `generate_proof` method returns siblings and depth in the exact format expected by the circuit
 - **Tree Structure**: The tree construction follows the same logic as the circuit
-- **Hash Consistency**: Both use Keccak256 for hashing, ensuring identical behavior
+- **Hash Consistency**: Both use Poseidon for hashing, ensuring identical behavior
 
 ## Testing
 
