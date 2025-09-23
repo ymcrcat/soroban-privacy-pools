@@ -191,10 +191,6 @@ impl<'a> LeanIMT<'a> {
 
     /// Computes the tree depth based on the number of leaves
     fn compute_tree_depth(leaf_count: u32) -> u32 {
-        if leaf_count == 0 {
-            return 0;
-        }
-        
         let mut depth = 0;
         let mut temp_count = leaf_count;
         while temp_count > 1 {
