@@ -14,14 +14,14 @@ template Withdraw(maxTreeDepth) {
     signal input stateTreeDepth;        // current state tree depth
 
     // signals to compute commitments
-    signal input label;                 // keccak256(scope, nonce) % SNARK_SCALAR_FIELD
+    signal input label;                 // hash(scope, nonce) % SNARK_SCALAR_FIELD
     signal input value;                 // value of the commitment
     signal input nullifier;             // nullifier of the commitment
     signal input secret;                // Secret of the commitment
 
     // signals for merkle tree inclusion proofs
     signal input stateSiblings[maxTreeDepth];   // siblings of the state tree
-    signal input stateIndex;                     // indices for the state tree
+    signal input stateIndex;                    // index of the commitment in the state tree
 
     // OUTPUT SIGNALS
     signal output nullifierHash;        // hash of commitment nullifier
