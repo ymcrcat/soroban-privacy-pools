@@ -11,7 +11,7 @@ include "comparators.circom";
 template Dummy() {
     // Inputs
     signal input withdrawnValue;
-    signal input label;                 // keccak256(scope, nonce) % SNARK_SCALAR_FIELD
+    signal input label;                 // hash(scope, nonce) % SNARK_SCALAR_FIELD
     signal input value;         // value of the existing commitment
     signal input nullifier;     // nullifier of the existing commitment
     signal input secret;        // Secret of the existing commitment
