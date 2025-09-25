@@ -14,7 +14,7 @@ cargo build --target wasm32v1-none --release -p privacy-pools || { echo "❌ Err
 soroban contract optimize --wasm target/wasm32v1-none/release/privacy_pools.wasm --wasm-out target/wasm32v1-none/release/privacy_pools.optimized.wasm || { echo "❌ Error: Failed to optimize WASM"; exit 1; }
 # Convert verification key to hex format and extract it
 echo "🔑 Converting verification key..."
-cargo run --bin circom2soroban vk circuits/output/dummy_verification_key.json > vk_hex.txt || { echo "❌ Error: Failed to convert verification key"; exit 1; }
+cargo run --bin circom2soroban vk circuits/output/main_verification_key.json > vk_hex.txt || { echo "❌ Error: Failed to convert verification key"; exit 1; }
 VK_HEX=$(cat vk_hex.txt | grep -o '[0-9a-f]*$')
 if [ -z "$VK_HEX" ]; then
     echo "❌ Error: Failed to extract verification key hex"
@@ -47,13 +47,22 @@ echo "Deposit successful!"
 # Step 4: Check balance
 echo "📊 Checking balance..."
 soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_balance || { echo "❌ Error: Failed to get balance"; exit 1; }
-# Step 5: Create proof
+# Step 5: Create state file and withdrawal proof
+echo "📋 Creating state file..."
+COMMITMENT=$(cat demo_coin.json | jq -r '.coin.commitment')
+echo "{
+  \"commitments\": [
+    \"$COMMITMENT\"
+  ],
+  \"scope\": \"demo_pool\"
+}" > demo_state.json
+
 echo "🔐 Creating withdrawal proof..."
-cargo run --bin coinutils withdraw demo_coin.json demo_pool withdrawal_input.json || { echo "❌ Error: Failed to create withdrawal input"; exit 1; }
+cargo run --bin coinutils withdraw demo_coin.json demo_state.json withdrawal_input.json || { echo "❌ Error: Failed to create withdrawal input"; exit 1; }
 echo "📝 Generating witness and proof..."
 cd circuits
-node build/dummy_js/generate_witness.js build/dummy_js/dummy.wasm ../withdrawal_input.json witness.wtns || { echo "❌ Error: Failed to generate witness"; exit 1; }
-snarkjs groth16 prove output/dummy_final.zkey witness.wtns proof.json public.json || { echo "❌ Error: Failed to generate proof"; exit 1; }
+node build/main_js/generate_witness.js build/main_js/main.wasm ../withdrawal_input.json witness.wtns || { echo "❌ Error: Failed to generate witness"; exit 1; }
+snarkjs groth16 prove output/main_final.zkey witness.wtns proof.json public.json || { echo "❌ Error: Failed to generate proof"; exit 1; }
 cd ..
 echo "🔄 Converting proof for Soroban..."
 cargo run --bin circom2soroban proof circuits/proof.json > proof_hex.txt || { echo "❌ Error: Failed to convert proof"; exit 1; }
