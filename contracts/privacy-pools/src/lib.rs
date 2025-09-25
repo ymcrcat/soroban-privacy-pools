@@ -1,14 +1,11 @@
 #![no_std]
 
-// Add global allocator for wasm32v1-none target
-extern crate wee_alloc;
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
 use soroban_sdk::{
     contract, contractimpl, 
-    vec, Env, String, Vec, Address, symbol_short, Symbol, Bytes, BytesN
+    vec, Env, String, Vec, Address, symbol_short, Symbol, Bytes, BytesN, U256
 };
+use soroban_sdk::crypto::bls12_381::Fr;
+use ark_ff::{BigInteger, PrimeField};
 
 use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
 use lean_imt::{LeanIMT, TREE_ROOT_KEY, TREE_DEPTH_KEY, TREE_LEAVES_KEY};
@@ -21,6 +18,8 @@ pub const ERROR_NULLIFIER_USED: &str = "Nullifier already used";
 pub const ERROR_INSUFFICIENT_BALANCE: &str = "Insufficient balance";
 pub const ERROR_COIN_OWNERSHIP_PROOF: &str = "Couldn't verify coin ownership proof";
 pub const ERROR_WITHDRAW_SUCCESS: &str = "Withdrawal successful";
+
+const TREE_DEPTH: u32 = 2;
 
 // Storage keys
 const NULL_KEY: Symbol = symbol_short!("null");
@@ -41,8 +40,8 @@ impl PrivacyPoolsContract {
         }
         env.storage().instance().set(&VK_KEY, &vk_bytes);
         
-        // Initialize empty merkle tree
-        let tree = LeanIMT::new(env);
+        // Initialize empty merkle tree with fixed depth
+        let tree = LeanIMT::new(env, TREE_DEPTH);
         let (leaves, depth, root) = tree.to_storage();
         env.storage().instance().set(&TREE_LEAVES_KEY, &leaves);
         env.storage().instance().set(&TREE_DEPTH_KEY, &depth);
@@ -173,11 +172,36 @@ impl PrivacyPoolsContract {
         let proof = Proof::from_bytes(env, &proof_bytes);
         let pub_signals = PublicSignals::from_bytes(env, &pub_signals_bytes);
 
+        // Extract public signals: [nullifierHash, withdrawnValue, stateRoot]
+        let nullifier_hash = &pub_signals.pub_signals.get(0).unwrap();
+        let _withdrawn_value = &pub_signals.pub_signals.get(1).unwrap();
+        let state_root = &pub_signals.pub_signals.get(2).unwrap();
+
+        // Validate state root matches current LeanIMT root
+        let leaves: Vec<BytesN<32>> = env.storage().instance().get(&TREE_LEAVES_KEY)
+            .unwrap_or(vec![&env]);
+        let depth: u32 = env.storage().instance().get(&TREE_DEPTH_KEY)
+            .unwrap_or(0);
+        let root: BytesN<32> = env.storage().instance().get(&TREE_ROOT_KEY)
+            .unwrap_or(BytesN::from_array(&env, &[0u8; 32]));
+        
+        let tree = LeanIMT::from_storage(env, leaves, depth, root);
+        let current_root_scalar = tree.get_root_scalar();
+        let current_root_bytes = current_root_scalar.into_bigint().to_bytes_be();
+        let mut padded_bytes = [0u8; 32];
+        let offset = 32 - current_root_bytes.len();
+        padded_bytes[offset..].copy_from_slice(&current_root_bytes);
+        let current_root_u256 = U256::from_be_bytes(env, &Bytes::from_array(env, &padded_bytes));
+        let current_root_fr = Fr::from_u256(current_root_u256);
+        if state_root != &current_root_fr {
+            return vec![env, String::from_str(env, ERROR_COIN_OWNERSHIP_PROOF)]
+        }
+
         // Check if nullifier has been used before
         let mut nullifiers: Vec<BytesN<32>> = env.storage().instance().get(&NULL_KEY)
             .unwrap_or(vec![env]);
 
-        let nullifier = pub_signals.pub_signals.get(0).unwrap().to_bytes();
+        let nullifier = nullifier_hash.to_bytes();
         
         if nullifiers.contains(&nullifier) {
             return vec![env, String::from_str(env, ERROR_NULLIFIER_USED)]
