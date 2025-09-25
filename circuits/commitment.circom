@@ -1,6 +1,6 @@
 pragma circom 2.2.0;
 
-include "poseidon.circom";  // Uses Poseidon hashing for commitments
+include "poseidon255.circom";  // Uses Poseidon255 hashing for commitments
 
 /**
  * @title CommitmentHasher template
@@ -23,7 +23,7 @@ template CommitmentHasher() {
     
     // inputs
     signal input value;
-    signal input label;              // keccak256(pool_scope, nonce) % SNARK_SCALAR_FIELD
+    signal input label;              // hash(pool_scope, nonce) % SNARK_SCALAR_FIELD
     signal input secret;             // secret of commitment
     signal input nullifier;
     
@@ -31,18 +31,22 @@ template CommitmentHasher() {
     signal output commitment;
     signal output nullifierHash;
 
-    component nullifierHasher = Poseidon(1);
-    nullifierHasher.inputs[0] <== nullifier;
+    component nullifierHasher = Poseidon255(1);
+    nullifierHasher.in[0] <== nullifier;
     
-    component precommitmentHasher = Poseidon(2);
-    precommitmentHasher.inputs[0] <== nullifier;
-    precommitmentHasher.inputs[1] <== secret;
+    component precommitmentHasher = Poseidon255(2);
+    precommitmentHasher.in[0] <== nullifier;
+    precommitmentHasher.in[1] <== secret;
 
-    component commitmentHasher = Poseidon(3);
-    commitmentHasher.inputs[0] <== value;
-    commitmentHasher.inputs[1] <== label;
-    commitmentHasher.inputs[2] <== precommitmentHasher.out;
+    // Match Rust poseidon_hash for >2 inputs: hash sequentially with Poseidon(2)
+    component hashValueLabel = Poseidon255(2);
+    hashValueLabel.in[0] <== value;
+    hashValueLabel.in[1] <== label;
 
-    commitment <== commitmentHasher.out;
+    component commitmentHasherSeq = Poseidon255(2);
+    commitmentHasherSeq.in[0] <== hashValueLabel.out;
+    commitmentHasherSeq.in[1] <== precommitmentHasher.out;
+
+    commitment <== commitmentHasherSeq.out;
     nullifierHash <== nullifierHasher.out;
 }
