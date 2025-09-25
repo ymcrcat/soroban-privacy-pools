@@ -13,42 +13,34 @@ include "mux1.circom";
  *   3. Tree is always built from leaves to root
  *   4. Tree is always balanced by construction
  *   5. Tree depth is dynamic and can increase with insertion of new leaves
- * @param maxDepth The maximum depth of the Merkle tree
+ * @param depth The depth of the Merkle tree
  */
-template MerkleProof(maxDepth) {
+template MerkleProof(depth) {
     // inputs 
     signal input leaf;                  // leaf value to prove inclusion of
     signal input leafIndex;             // index of leaf in the Merkle tree
-    signal input siblings[maxDepth];    // sibling values along the path to the root
-    signal input actualDepth;           // current tree depth
+    signal input siblings[depth];       // sibling values along the path to the root
 
     // outputs
     signal output out;
     
     // internal signals
-    signal nodes[maxDepth + 1]; // stores computed node values at each level
-    signal indices[maxDepth];   // stores path indices for each level
+    signal nodes[depth + 1]; // stores computed node values at each level
+    signal indices[depth];   // stores path indices for each level
 
     // components
-    component siblingIsEmpty[maxDepth]; // checks if sibling node is empty
-    component hashInCorrectOrder[maxDepth]; // orders node pairs for hashing
-    component latestValidHash[maxDepth]; // selects between hash and propagation
-    component hashes[maxDepth]; // Hash components (can use any hash function)
+    component hashInCorrectOrder[depth]; // orders node pairs for hashing
+    component hashes[depth]; // Hash components (can use any hash function)
 
     // implmenentation
-    component depthCheck = LessEqThan(maxDepth);
-    depthCheck.in[0] <== actualDepth;
-    depthCheck.in[1] <== maxDepth;
-    depthCheck.out === 1;
-
-    component indexToPath = Num2Bits(maxDepth);
+    component indexToPath = Num2Bits(depth);
     indexToPath.in <== leafIndex;
     indices <== indexToPath.out;
 
     // Init leaf with value
     nodes[0] <== leaf;
 
-    for (var i = 0; i < maxDepth; i++) {
+    for (var i = 0; i < depth; i++) {
         // prepare pairs for both possible orderings
         var childrenToSort[2][2] = [ [nodes[i], siblings[i]], [siblings[i], nodes[i]] ];
         hashInCorrectOrder[i] = MultiMux1(2);
@@ -62,5 +54,5 @@ template MerkleProof(maxDepth) {
         nodes[i + 1] <== hashes[i].out;
     }
 
-    out <== nodes[maxDepth];
+    out <== nodes[depth];
 }

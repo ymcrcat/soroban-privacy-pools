@@ -3,7 +3,7 @@ use crate::*;
 #[test]
 fn test_new_tree() {
     let env = Env::default();
-    let tree = LeanIMT::new(&env);
+    let tree = LeanIMT::new(&env, 0);
     assert_eq!(tree.get_depth(), 0);
     assert_eq!(tree.get_leaf_count(), 0);
     assert!(tree.is_empty());
@@ -12,7 +12,7 @@ fn test_new_tree() {
 #[test]
 fn test_insert_u64() {
     let env = Env::default();
-    let mut tree = LeanIMT::new(&env);
+    let mut tree = LeanIMT::new(&env, 2);
     
     tree.insert_u64(0);
     tree.insert_u64(0);
@@ -30,7 +30,7 @@ fn test_insert_u64() {
 #[test]
 fn test_hash_pair() {
     let env = Env::default();
-    let tree = LeanIMT::new(&env);
+    let tree = LeanIMT::new(&env, 0);
     
     let left_scalar = u64_to_bls_scalar(1);
     let right_scalar = u64_to_bls_scalar(2);
@@ -45,7 +45,7 @@ fn test_hash_pair() {
 #[test]
 fn test_compute_node_at_level_multiple_levels() {
     let env = Env::default();
-    let mut tree = LeanIMT::new(&env);
+    let mut tree = LeanIMT::new(&env, 3);
     
     // Insert 8 leaves to create a 3-level tree
     for i in 0..8 {
@@ -86,35 +86,9 @@ fn test_compute_node_at_level_multiple_levels() {
 }
 
 #[test]
-fn test_compute_tree_depth() {
-    // Test edge cases
-    assert_eq!(LeanIMT::compute_tree_depth(0), 0);
-    assert_eq!(LeanIMT::compute_tree_depth(1), 0);
-    
-    // Test powers of 2
-    assert_eq!(LeanIMT::compute_tree_depth(2), 1);
-    assert_eq!(LeanIMT::compute_tree_depth(4), 2);
-    assert_eq!(LeanIMT::compute_tree_depth(8), 3);
-    assert_eq!(LeanIMT::compute_tree_depth(16), 4);
-    assert_eq!(LeanIMT::compute_tree_depth(32), 5);
-    
-    // Test non-powers of 2
-    assert_eq!(LeanIMT::compute_tree_depth(3), 2);  // 3 leaves -> 2 levels
-    assert_eq!(LeanIMT::compute_tree_depth(5), 3);  // 5 leaves -> 3 levels
-    assert_eq!(LeanIMT::compute_tree_depth(6), 3);  // 6 leaves -> 3 levels
-    assert_eq!(LeanIMT::compute_tree_depth(7), 3);  // 7 leaves -> 3 levels
-    assert_eq!(LeanIMT::compute_tree_depth(9), 4);  // 9 leaves -> 4 levels
-    assert_eq!(LeanIMT::compute_tree_depth(15), 4); // 15 leaves -> 4 levels
-    
-    // Test larger numbers
-    assert_eq!(LeanIMT::compute_tree_depth(100), 7);  // 100 leaves -> 7 levels
-    assert_eq!(LeanIMT::compute_tree_depth(1000), 10); // 1000 leaves -> 10 levels
-}
-
-#[test]
 fn test_generate_proof_two_leaves() {
     let env = Env::default();
-    let mut tree = LeanIMT::new(&env);
+    let mut tree = LeanIMT::new(&env, 1);
     
     // Insert exactly 2 leaves to test the special 2-leaf case
     tree.insert_u64(1);

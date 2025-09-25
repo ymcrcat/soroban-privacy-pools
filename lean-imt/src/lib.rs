@@ -59,18 +59,19 @@ pub struct LeanIMT<'a> {
 }
 
 impl<'a> LeanIMT<'a> {
-    /// Creates a new empty LeanIMT
-    pub fn new(env: &'a Env) -> Self {
-        let empty_hash = BytesN::from_array(env, &[0u8; 32]);
-        Self {
+    /// Creates a new LeanIMT with a fixed depth. Missing leaves are assumed zero.
+    pub fn new(env: &'a Env, depth: u32) -> Self {
+        let mut tree = Self {
             env,
             leaves: vec![env],
-            depth: 0,
-            root: empty_hash,
-        }
+            depth,
+            root: BytesN::from_array(env, &[0u8; 32]),
+        };
+        tree.recompute_tree();
+        tree
     }
 
-    /// Inserts a new leaf into the tree
+    /// Inserts a new leaf into the tree (appends; missing leaves remain zero)
     pub fn insert(&mut self, leaf: BytesN<32>) {
         self.leaves.push_back(leaf);
         self.recompute_tree();
@@ -98,7 +99,7 @@ impl<'a> LeanIMT<'a> {
         self.depth
     }
 
-    /// Gets the number of leaves in the tree
+    /// Gets the number of leaves that have been explicitly inserted
     pub fn get_leaf_count(&self) -> u32 {
         self.leaves.len() as u32
     }
@@ -119,9 +120,7 @@ impl<'a> LeanIMT<'a> {
                 siblings.push_back(self.leaves.get(0).unwrap());
             }
             
-            if self.depth > 0 {
-                siblings.push_back(self.root.clone());
-            }
+            siblings.push_back(self.root.clone());
         } else {
             // General approach
             let mut current_index = leaf_index;
@@ -159,7 +158,6 @@ impl<'a> LeanIMT<'a> {
         Some((siblings, self.depth))
     }
 
-
     /// Computes the value of an internal node at a specific level
     fn compute_node_at_level(&self, node_index: u32, target_level: u32) -> BytesN<32> {
         let result_scalar = self.compute_node_at_level_scalar(node_index, target_level);
@@ -189,37 +187,23 @@ impl<'a> LeanIMT<'a> {
         }
     }
 
-    /// Computes the tree depth based on the number of leaves
-    fn compute_tree_depth(leaf_count: u32) -> u32 {
-        let mut depth = 0;
-        let mut temp_count = leaf_count;
-        while temp_count > 1 {
-            temp_count = (temp_count + 1) / 2;
-            depth += 1;
-        }
-        depth
-    }
-
-    /// Recomputes the entire tree after insertion
+    /// Recomputes the entire tree after insertion using fixed depth and zero padding
     fn recompute_tree(&mut self) {
-        if self.leaves.is_empty() {
-            self.root = BytesN::from_array(&self.env, &[0u8; 32]);
-            self.depth = 0;
-            return;
-        }
+        let target_leaf_count: usize = if self.depth == 0 { 1 } else { 1usize << (self.depth as usize) };
 
-        let leaf_count = self.leaves.len() as u32;
-        self.depth = Self::compute_tree_depth(leaf_count);
-
-        // Convert leaves to BlsScalar for computation using alloc::vec::Vec
-        let mut current_level_scalars: alloc::vec::Vec<BlsScalar> = alloc::vec::Vec::new();
-        for i in 0..self.leaves.len() {
-            let leaf_bytes = self.leaves.get(i).unwrap();
-            let leaf_scalar = bytes_to_bls_scalar(&leaf_bytes);
-            current_level_scalars.push(leaf_scalar);
+        // Build leaf level with explicit leaves followed by zeros
+        let mut current_level_scalars: alloc::vec::Vec<BlsScalar> = alloc::vec::Vec::with_capacity(target_leaf_count);
+        for i in 0..target_leaf_count {
+            if i < (self.leaves.len() as usize) {
+                let leaf_bytes = self.leaves.get(i as u32).unwrap();
+                let leaf_scalar = bytes_to_bls_scalar(&leaf_bytes);
+                current_level_scalars.push(leaf_scalar);
+            } else {
+                current_level_scalars.push(BlsScalar::from(0u64));
+            }
         }
         
-        // Compute tree levels entirely in BlsScalar space
+        // Compute up the tree for exactly self.depth levels
         for _level in 0..self.depth {
             let mut next_level_scalars: alloc::vec::Vec<BlsScalar> = alloc::vec::Vec::new();
             let mut i: usize = 0;
@@ -237,9 +221,11 @@ impl<'a> LeanIMT<'a> {
             current_level_scalars = next_level_scalars;
         }
 
-        // Convert final result back to BytesN<32> for storage
+        // Final root (if depth == 0, it's the single leaf or zero)
         if current_level_scalars.len() > 0 {
             self.root = bls_scalar_to_bytes(&self.env, current_level_scalars[0]);
+        } else {
+            self.root = BytesN::from_array(&self.env, &[0u8; 32]);
         }
     }
 

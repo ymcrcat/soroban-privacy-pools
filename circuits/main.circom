@@ -4,14 +4,13 @@ include "commitment.circom";
 include "merkleProof.circom";
 include "poseidon.circom";
 
-template Withdraw(maxTreeDepth) {
+template Withdraw(treeDepth) {
     // PUBLIC SIGNALS
     signal input withdrawnValue;
 
     // PRIVATE SIGNALS
     // signals for merkle tree inclusion proofs
     signal input stateRoot;             // a known state root
-    signal input stateTreeDepth;        // current state tree depth
 
     // signals to compute commitments
     signal input label;                 // hash(scope, nonce) % SNARK_SCALAR_FIELD
@@ -20,7 +19,7 @@ template Withdraw(maxTreeDepth) {
     signal input secret;                // Secret of the commitment
 
     // signals for merkle tree inclusion proofs
-    signal input stateSiblings[maxTreeDepth];   // siblings of the state tree
+    signal input stateSiblings[treeDepth];   // siblings of the state tree
     signal input stateIndex;                    // index of the commitment in the state tree
 
     // OUTPUT SIGNALS
@@ -40,11 +39,10 @@ template Withdraw(maxTreeDepth) {
     nullifierHash <== commitmentHasher.nullifierHash;
 
     // verify commitment is in the state tree
-    component stateRootChecker = MerkleProof(maxTreeDepth);
+    component stateRootChecker = MerkleProof(treeDepth);
     stateRootChecker.leaf <== commitment;
     stateRootChecker.leafIndex <== stateIndex;
     stateRootChecker.siblings <== stateSiblings;
-    stateRootChecker.actualDepth <== stateTreeDepth;
     
     stateRoot === stateRootChecker.out;
 
@@ -62,4 +60,4 @@ template Withdraw(maxTreeDepth) {
     // (this is enforced by the remainingValue being non-negative through range check)
 }
 
-component main {public [withdrawnValue, stateRoot, stateTreeDepth]} = Withdraw(20);  // 20 levels = 1,048,576-leaf tree
+component main {public [withdrawnValue, stateRoot]} = Withdraw(2);  // 20 levels = 1,048,576-leaf tree

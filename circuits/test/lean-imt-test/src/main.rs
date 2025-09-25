@@ -9,7 +9,6 @@ struct MerkleProofResult {
     leaf: String,
     leafIndex: u32,
     siblings: Vec<String>,
-    actualDepth: u32,
     root: String,
 }
 
@@ -55,7 +54,6 @@ fn main() {
             })
             .collect();
         println!("Siblings: {:?}", siblings_decimal_display);
-        println!("Actual depth: {}", proof_result.actualDepth);
         println!("Merkle root: {}", proof_result.root);
         
         // Save circuit-compatible input with decimal string representations
@@ -68,7 +66,6 @@ fn main() {
             leaf: leaf_decimal,
             leafIndex: proof_result.leafIndex,
             siblings: siblings_decimal,
-            actualDepth: proof_result.actualDepth,
         };
         let circuit_json = serde_json::to_string_pretty(&circuit_input).unwrap();
         std::fs::write("circuit_input.json", circuit_json).unwrap();
@@ -88,7 +85,7 @@ fn main() {
 
 fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerkleProofResult {
     // Create a new LeanIMT instance
-    let mut tree = LeanIMT::new(env);
+    let mut tree = LeanIMT::new(env, 2);
     
     for &leaf in leaves {
         tree.insert_u64(leaf);
@@ -96,29 +93,17 @@ fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerklePro
     
     // Generate the merkle proof for the specified leaf index
     let proof = tree.generate_proof(leaf_index).expect("Failed to generate proof");
-    let (siblings, actual_depth) = proof;
+    let (siblings, depth) = proof;
     
     // Get the leaf value using the new scalar-based method
     let leaf_scalar = tree.get_leaf_scalar(leaf_index as usize).expect("Leaf not found");
     let leaf_value_decimal = leaf_scalar.to_string();
     
-    // Convert siblings to decimal strings, but filter out the root (last element)
-    // The circuit should compute the root itself, not receive it as input
+    // Convert siblings to decimal strings, limited to exactly `depth` items (exclude extra root)
     let mut siblings_decimal = Vec::new();
-    let siblings_count = siblings.len();
-    let siblings_to_process = if siblings_count > actual_depth {
-        // Remove the last element (root) if it was included
-        actual_depth
-    } else {
-        siblings_count
-    };
-    
-    for i in 0..siblings_to_process {
-        let sibling = siblings.get(i).unwrap();
+    for i in 0..(depth as usize) {
         if i == 0 {
             // First sibling is the other leaf at the same level
-            // For leaf 0: sibling is leaf 1, for leaf 1: sibling is leaf 0
-            // For leaf 2: sibling is leaf 3, for leaf 3: sibling is leaf 2
             let sibling_leaf_index = if leaf_index < 2 {
                 if leaf_index == 0 { 1 } else { 0 }
             } else {
@@ -126,7 +111,7 @@ fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerklePro
             };
             siblings_decimal.push(leaves[sibling_leaf_index].to_string());
         } else {
-            // Second sibling is a hash value - convert bytes directly to decimal
+            let sibling = siblings.get(i as u32).expect("Missing sibling in proof for required depth");
             let decimal_value = BigUint::from_bytes_be(&sibling.to_array());
             siblings_decimal.push(decimal_value.to_string());
         }
@@ -140,7 +125,6 @@ fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerklePro
         leaf: leaf_value_decimal,
         leafIndex: leaf_index,
         siblings: siblings_decimal,
-        actualDepth: actual_depth,
         root: root_decimal,
     }
 }
@@ -151,6 +135,5 @@ struct CircuitInput {
     leaf: String,
     leafIndex: u32,
     siblings: Vec<String>,
-    actualDepth: u32,
 }
 
