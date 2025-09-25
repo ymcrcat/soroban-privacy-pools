@@ -53,7 +53,7 @@ This will generate a `circuit_input.json` file with test data including:
 #### Step 2: Compile the Test Circuit
 ```bash
 cd ../../
-circom circuits/test/test_merkleProof.circom --r1cs --wasm --sym --c -o circuits/build/
+circom circuits/test/test_merkleProof.circom -l $CIRCOMLIB --wasm --prime bls12381 -o circuits/build/
 ```
 
 #### Step 3: Generate Witness from Circom Circuit
