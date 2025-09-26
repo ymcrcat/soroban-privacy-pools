@@ -83,7 +83,7 @@ let tree = LeanIMT::from_storage(env.clone(), leaves, depth, root);
 - `get_root() -> BytesN<32>`: Get the current merkle root
 - `get_depth() -> u32`: Get the current tree depth
 - `get_leaf_count() -> u32`: Get the number of leaves
-- `generate_proof(leaf_index: u32) -> Option<(Vec<BytesN<32>>, u32)>`: Generate inclusion proof
+- `generate_proof(leaf_index: u32) -> Option<(Vec<BlsScalar>, u32)>`: Generate inclusion proof
 
 ### Storage Methods
 
