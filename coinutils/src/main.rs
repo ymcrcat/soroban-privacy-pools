@@ -11,7 +11,7 @@ use lean_imt::LeanIMT;
 use soroban_sdk::Env;
 
 const COIN_VALUE: i128 = 1000000000; // 1 XLM in stroops
-
+const TREE_DEPTH: u32 = 2;
 
 #[derive(Serialize)]
 struct SnarkInput {
@@ -128,7 +128,7 @@ fn withdraw_coin(coin: &CoinData, state_file: &StateFile) -> Result<SnarkInput, 
     
     // Build merkle tree from state file using lean-imt
     let env = Env::default();
-    let mut tree = LeanIMT::new(&env, 4);
+    let mut tree = LeanIMT::new(&env, TREE_DEPTH);
     let mut commitment_index = None;
     
     for (index, commitment_str) in state_file.commitments.iter().enumerate() {
