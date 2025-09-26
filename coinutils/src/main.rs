@@ -75,7 +75,7 @@ fn poseidon_hash(inputs: &[Fr]) -> Fr {
 
 fn to_bytesn32(fr: &Fr) -> [u8; 32] {
     let mut bytes = [0u8; 32];
-    let fr_bytes = fr.into_bigint().to_bytes_le();
+    let fr_bytes = fr.into_bigint().to_bytes_be();
     let offset = 32 - fr_bytes.len();
     bytes[offset..].copy_from_slice(&fr_bytes);
     bytes
