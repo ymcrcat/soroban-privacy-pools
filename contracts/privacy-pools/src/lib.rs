@@ -34,10 +34,6 @@ pub struct PrivacyPoolsContract;
 #[contractimpl]
 impl PrivacyPoolsContract {
     pub fn __constructor(env: &Env, vk_bytes: Bytes) {
-        // Only allow initialization if not already set
-        if env.storage().instance().has(&VK_KEY) {
-            panic!("Contract already initialized");
-        }
         env.storage().instance().set(&VK_KEY, &vk_bytes);
         
         // Initialize empty merkle tree with fixed depth
