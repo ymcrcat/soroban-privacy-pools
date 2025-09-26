@@ -84,18 +84,18 @@ fn init_vk(env: &Env) -> Bytes {
 }
 
 fn init_proof(env: &Env) -> Bytes {
-    let pi_ax = "158033334800449124490469657688810112220589452734387425710525046124678865232575126953080029490502049855593790040830";
-    let pi_ay = "175574861788350488542922343740891807424023698102526446571325626000972758065431291342135537852630893726427633341698";
+    let pi_ax = "623874331280755318675032028406937065977725486252325486511972745459164911332858317134663761205438051903871415266594";
+    let pi_ay = "2351505213654826766024240387432194041177606772003164057376315112368186928111937080646159805750758330313591011353323";
     
     
-    let pi_bx1 = "2620653872258155066204830498477264311008157155971276125753531782028037655156882256751786957344153392192849446299399";
-    let pi_bx2 = "233111972843367478621045521233648272792012750373681336309849501454427417841982844827535721348556955301409522546269";
-    let pi_by1 = "3284922827281256553634891875031245188730449868255829163983669814857167723395685127696310322234178963745719474898193";
-    let pi_by2 = "922660824433161757790481531551661100991167116001098691841466625500817838737353999619621714028279609348835557215452";
+    let pi_bx1 = "3414965805144266469848732520230200070280272613616656676214223685201956233859774915412620537820406336959526884104199";
+    let pi_bx2 = "3609731732797990147825878518213556904262746586642259361382733341256064588633959372736831050227039446670621597405445";
+    let pi_by1 = "1323221690716023297808669808817894559987846471410382577943086306469821853340399493869813204523404236318081373227344";
+    let pi_by2 = "1738568031452103058775637282571705753342283996388095844643100714649217960690663682749313691572484001594046739373231";
     
     
-    let pi_cx = "3593081164265626300437169166879096184055940172728941833366733136924272884353307948888172857445674642800583708555295";
-    let pi_cy = "1154834298039069775101087371547055423787759057928739391310094399038924582616557020168927887337684692894739051114929";
+    let pi_cx = "1602028708031377278044991090092661107773050627719437015908830864673473524500342119845170476959740428797897573767945";
+    let pi_cy = "152663850280813890470460040537231389750781224281293920573556153853091801399544474324447572068229527992181302454550";
 
     // Construct the proof from the pre-computed components
     let proof = Proof {
@@ -108,9 +108,9 @@ fn init_proof(env: &Env) -> Bytes {
 }
 
 fn init_pub_signals(env: &Env) -> Bytes {
-    let public_0 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x65, 0x18, 0x92, 0xef, 0x37, 0x4f, 0x78, 0x93, 0x82, 0x36, 0xd4, 0x83, 0x2b, 0x62, 0xd3, 0x5f, 0xb7, 0x9c, 0x54, 0xf8, 0x72, 0xe3, 0x0f, 0x5a, 0xa9, 0xab, 0xf9, 0xe6, 0xab, 0x15, 0xcb, 0x40]));
+    let public_0 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x34, 0x8b, 0x9d, 0x76, 0x54, 0x17, 0xed, 0x40, 0x9f, 0x98, 0xdb, 0x0c, 0x1e, 0x94, 0xa2, 0xba, 0x73, 0x41, 0xc9, 0xd2, 0xb3, 0xf5, 0x53, 0x20, 0xa9, 0xe2, 0x92, 0xd9, 0xab, 0x13, 0xa1, 0x28]));
     let public_1 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3b, 0x9a, 0xca, 0x00]));
-    let public_2 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x43, 0xc7, 0x5b, 0x13, 0x4d, 0x38, 0x9a, 0x5f, 0x97, 0x8c, 0xec, 0x2a, 0x75, 0x91, 0x10, 0xe9, 0x9d, 0x1b, 0x9b, 0x7b, 0xe0, 0x34, 0x45, 0xbd, 0xb9, 0x64, 0xd3, 0x43, 0x92, 0xc5, 0x79, 0x63]));
+    let public_2 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x58, 0x4a, 0xc7, 0x9d, 0xad, 0x91, 0x7f, 0xc6, 0x35, 0x38, 0xfc, 0x36, 0x28, 0x9b, 0x8b, 0x11, 0x6e, 0xf9, 0x05, 0x62, 0x81, 0x28, 0xfb, 0x2e, 0xdc, 0x62, 0xb2, 0x75, 0xf7, 0xb3, 0x57, 0x39]));
     
     // Create output vector for verification:
     let output = Vec::from_array(&env, [Fr::from_u256(public_0), Fr::from_u256(public_1), Fr::from_u256(public_2)]);
@@ -138,7 +138,7 @@ fn init_erronous_pub_signals(env: &Env) -> Bytes {
 }
 
 #[test]
-fn test_deposit_and_withdraw() {
+fn test_deposit_and_withdraw_correct_proof() {
     let env = Env::default();
     let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
     
@@ -153,10 +153,10 @@ fn test_deposit_and_withdraw() {
 
     // Test deposit
     let commitment = BytesN::from_array(&env, &[
-        0x0f, 0xf7, 0x5c, 0xe2, 0x39, 0x8e, 0x0a, 0x37,
-        0xca, 0xc0, 0xab, 0xa2, 0x8f, 0x39, 0x42, 0x98,
-        0x5b, 0x4e, 0xf3, 0xcf, 0x92, 0x39, 0xb4, 0x64,
-        0xf0, 0xd8, 0x11, 0xc5, 0x63, 0x9e, 0x97, 0x44
+        0x3f, 0xf8, 0x11, 0x53, 0xc6, 0x4a, 0x52, 0x86,
+        0xc2, 0x77, 0x42, 0x1e, 0xe1, 0x74, 0xca, 0x86,
+        0xfb, 0xd2, 0xa1, 0x80, 0x62, 0x69, 0x31, 0x66,
+        0xef, 0xb4, 0x65, 0x0c, 0xe2, 0xf1, 0x72, 0x91
     ]);
     
     // Mock authentication for alice
@@ -185,7 +185,7 @@ fn test_deposit_and_withdraw() {
         ]
     );
 
-    env.cost_estimate().budget().print();
+    // env.cost_estimate().budget().print();
 
     // Check balance after withdrawal
     assert_eq!(client.get_balance(), 0);
@@ -212,10 +212,10 @@ fn test_deposit_and_withdraw_wrong_proof() {
 
     // Test deposit
     let commitment = BytesN::from_array(&env, &[
-        0x0f, 0xf7, 0x5c, 0xe2, 0x39, 0x8e, 0x0a, 0x37,
-        0xca, 0xc0, 0xab, 0xa2, 0x8f, 0x39, 0x42, 0x98,
-        0x5b, 0x4e, 0xf3, 0xcf, 0x92, 0x39, 0xb4, 0x64,
-        0xf0, 0xd8, 0x11, 0xc5, 0x63, 0x9e, 0x97, 0x44
+        0x3f, 0xf8, 0x11, 0x53, 0xc6, 0x4a, 0x52, 0x86,
+        0xc2, 0x77, 0x42, 0x1e, 0xe1, 0x74, 0xca, 0x86,
+        0xfb, 0xd2, 0xa1, 0x80, 0x62, 0x69, 0x31, 0x66,
+        0xef, 0xb4, 0x65, 0x0c, 0xe2, 0xf1, 0x72, 0x91
     ]);
 
     // Mock authentication for alice
@@ -283,9 +283,14 @@ fn test_reuse_nullifier() {
     let bob = Address::generate(&env);
 
     // First deposit
-    let commitment = BytesN::from_array(&env, &[4u8; 32]);
+    let commitment1 = BytesN::from_array(&env, &[
+        0x3f, 0xf8, 0x11, 0x53, 0xc6, 0x4a, 0x52, 0x86,
+        0xc2, 0x77, 0x42, 0x1e, 0xe1, 0x74, 0xca, 0x86,
+        0xfb, 0xd2, 0xa1, 0x80, 0x62, 0x69, 0x31, 0x66,
+        0xef, 0xb4, 0x65, 0x0c, 0xe2, 0xf1, 0x72, 0x91
+    ]);
     env.mock_all_auths();
-    client.deposit(&alice, &commitment);
+    client.deposit(&alice, &commitment1);
 
     // First withdraw
     let proof = init_proof(&env);

@@ -1,14 +1,15 @@
 #![no_std]
 
+extern crate alloc;
+
 use soroban_sdk::{
     contract, contractimpl, 
-    vec, Env, String, Vec, Address, symbol_short, Symbol, Bytes, BytesN, U256
+    vec, Env, String, Vec, Address, symbol_short, Symbol, Bytes, BytesN
 };
-use soroban_sdk::crypto::bls12_381::Fr;
-use ark_ff::{BigInteger, PrimeField};
 
 use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
 use lean_imt::{LeanIMT, TREE_ROOT_KEY, TREE_DEPTH_KEY, TREE_LEAVES_KEY};
+use ark_bls12_381::Fr as BlsScalar;
 
 #[cfg(test)]
 mod test;
@@ -178,27 +179,7 @@ impl PrivacyPoolsContract {
         // Extract public signals: [nullifierHash, withdrawnValue, stateRoot]
         let nullifier_hash = &pub_signals.pub_signals.get(0).unwrap();
         let _withdrawn_value = &pub_signals.pub_signals.get(1).unwrap();
-        let state_root = &pub_signals.pub_signals.get(2).unwrap();
-
-        // Validate state root matches current LeanIMT root
-        let leaves: Vec<BytesN<32>> = env.storage().instance().get(&TREE_LEAVES_KEY)
-            .unwrap_or(vec![&env]);
-        let depth: u32 = env.storage().instance().get(&TREE_DEPTH_KEY)
-            .unwrap_or(0);
-        let root: BytesN<32> = env.storage().instance().get(&TREE_ROOT_KEY)
-            .unwrap_or(BytesN::from_array(&env, &[0u8; 32]));
-        
-        let tree = LeanIMT::from_storage(env, leaves, depth, root);
-        let current_root_scalar = tree.get_root_scalar();
-        let current_root_bytes = current_root_scalar.into_bigint().to_bytes_be();
-        let mut padded_bytes = [0u8; 32];
-        let offset = 32 - current_root_bytes.len();
-        padded_bytes[offset..].copy_from_slice(&current_root_bytes);
-        let current_root_u256 = U256::from_be_bytes(env, &Bytes::from_array(env, &padded_bytes));
-        let current_root_fr = Fr::from_u256(current_root_u256);
-        if state_root != &current_root_fr {
-            return vec![env, String::from_str(env, ERROR_COIN_OWNERSHIP_PROOF)]
-        }
+        let proof_root = &pub_signals.pub_signals.get(2).unwrap();
 
         // Check if nullifier has been used before
         let mut nullifiers: Vec<BytesN<32>> = env.storage().instance().get(&NULL_KEY)
@@ -208,6 +189,27 @@ impl PrivacyPoolsContract {
         
         if nullifiers.contains(&nullifier) {
             return vec![env, String::from_str(env, ERROR_NULLIFIER_USED)]
+        }
+        
+        let state_root: BytesN<32> = env.storage().instance().get(&TREE_ROOT_KEY)
+            .unwrap_or(BytesN::from_array(&env, &[0u8; 32]));
+        
+        let state_root_scalar = lean_imt::bytes_to_bls_scalar(&state_root);
+        // Log both values for debugging
+        let proof_root_u256 = proof_root.to_u256();
+        let proof_root_bytes = proof_root_u256.to_be_bytes();
+        let mut proof_root_array = [0u8; 32];
+        proof_root_bytes.copy_into_slice(&mut proof_root_array);
+        let proof_root_str = Self::bytes_to_decimal_string(env, &proof_root_array);
+        
+        // Convert state_root_scalar (BlsScalar) to decimal string
+        let state_root_str = Self::bls_scalar_to_decimal_string(env, &state_root_scalar);
+        
+        // env.logs().add("Proof root", &[proof_root_str.clone().into()]);
+        // env.logs().add("State root", &[state_root_str.clone().into()]);
+        
+        if state_root_str != proof_root_str {
+             return vec![env, String::from_str(env, ERROR_COIN_OWNERSHIP_PROOF)]
         }
         
         let res = Groth16Verifier::verify_proof(env, vk, proof, &pub_signals.pub_signals);
@@ -258,5 +260,46 @@ impl PrivacyPoolsContract {
     pub fn get_balance(env: &Env) -> i128 {
         env.storage().instance().get(&BALANCE_KEY)
             .unwrap_or(0)
+    }
+
+    /// Helper function to convert BlsScalar to decimal string for logging
+    fn bls_scalar_to_decimal_string(env: &Env, scalar: &BlsScalar) -> String {
+        let bytes = lean_imt::bls_scalar_to_bytes(env, *scalar);
+        let array = bytes.to_array();
+        Self::bytes_to_decimal_string(env, &array)
+    }
+
+    /// Helper function to convert bytes to decimal string for logging
+    fn bytes_to_decimal_string(env: &Env, bytes: &[u8; 32]) -> String {
+        // Convert 32 bytes to decimal string using a simple approach
+        // We'll build the decimal string by processing the bytes in chunks
+        let mut result = alloc::vec![0u8; 80]; // Max decimal digits for 256-bit number
+        let mut len = 1;
+        result[0] = 0; // Start with 0
+        
+        for &byte in bytes.iter() {
+            // Multiply current result by 256 and add current byte
+            let mut carry = byte as u16;
+            for i in 0..len {
+                let temp = result[i] as u16 * 256 + carry;
+                result[i] = (temp % 10) as u8;
+                carry = temp / 10;
+            }
+            
+            // Handle remaining carry
+            while carry > 0 {
+                result[len] = (carry % 10) as u8;
+                carry /= 10;
+                len += 1;
+            }
+        }
+        
+        // Convert to string (reverse order since we built it backwards)
+        let mut decimal_chars = alloc::vec![0u8; len];
+        for i in 0..len {
+            decimal_chars[i] = b'0' + result[len - 1 - i];
+        }
+        
+        String::from_str(env, core::str::from_utf8(&decimal_chars).unwrap())
     }
 }
