@@ -163,6 +163,13 @@ impl PrivacyPoolsContract {
             pub_signals_bytes: Bytes) -> Vec<String> {
         to.require_auth();
 
+        // Check contract balance before updating state
+        let current_balance = env.storage().instance().get(&BALANCE_KEY)
+            .unwrap_or(0);
+        if current_balance < FIXED_AMOUNT {
+            return vec![env, String::from_str(env, ERROR_INSUFFICIENT_BALANCE)]
+        }
+
         let vk_bytes: Bytes = env.storage().instance().get(&VK_KEY).unwrap();
         let vk = VerificationKey::from_bytes(env, &vk_bytes).unwrap();
         let proof = Proof::from_bytes(env, &proof_bytes);
@@ -206,13 +213,6 @@ impl PrivacyPoolsContract {
         let res = Groth16Verifier::verify_proof(env, vk, proof, &pub_signals.pub_signals);
         if res.is_err() || !res.unwrap() {
             return vec![env, String::from_str(env, ERROR_COIN_OWNERSHIP_PROOF)]
-        }
-
-        // Check contract balance before updating state
-        let current_balance = env.storage().instance().get(&BALANCE_KEY)
-            .unwrap_or(0);
-        if current_balance < FIXED_AMOUNT {
-            return vec![env, String::from_str(env, ERROR_INSUFFICIENT_BALANCE)]
         }
 
         // Add nullifier to used nullifiers only after all checks pass
