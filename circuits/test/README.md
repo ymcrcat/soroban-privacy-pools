@@ -165,8 +165,9 @@ cat test_poseidon_input.json | cargo run --bin test_poseidon --manifest-path pos
 
 #### Step 2: Generate Witness from Circom Circuit
 ```bash
-cd circuits/build/test_poseidon_js
-node generate_witness.js test_poseidon.wasm ../../test/test_poseidon_input.json ../../test/test_poseidon_new.wtns
+cd circuits/test
+circom test_poseidon.circom -l $CIRCOMLIB --prime bls12381 --wasm -o ../build
+node ../build/test_poseidon_js/generate_witness.js ../build/test_poseidon_js/test_poseidon.wasm test_poseidon_input.json test_poseidon_new.wtns
 ```
 
 #### Step 3: Extract Witness Outputs
