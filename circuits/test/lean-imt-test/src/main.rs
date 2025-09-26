@@ -1,7 +1,6 @@
 use lean_imt::LeanIMT;
 use serde::{Deserialize, Serialize};
 use soroban_sdk::Env;
-use num_bigint::BigUint;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
@@ -99,7 +98,7 @@ fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerklePro
     let leaf_scalar = tree.get_leaf_scalar(leaf_index as usize).expect("Leaf not found");
     let leaf_value_decimal = leaf_scalar.to_string();
     
-    // Convert siblings to decimal strings, limited to exactly `depth` items (exclude extra root)
+    // Convert siblings to decimal strings - exactly `depth` items (no root included)
     let mut siblings_decimal = Vec::new();
     for i in 0..(depth as usize) {
         if i == 0 {
@@ -111,9 +110,9 @@ fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerklePro
             };
             siblings_decimal.push(leaves[sibling_leaf_index].to_string());
         } else {
-            let sibling = siblings.get(i as u32).expect("Missing sibling in proof for required depth");
-            let decimal_value = BigUint::from_bytes_be(&sibling.to_array());
-            siblings_decimal.push(decimal_value.to_string());
+            let sibling = siblings.get(i).expect("Missing sibling in proof for required depth");
+            let decimal_value = sibling.to_string();
+            siblings_decimal.push(decimal_value);
         }
     }
     

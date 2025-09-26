@@ -105,22 +105,22 @@ impl<'a> LeanIMT<'a> {
     }
 
     /// Generates a merkle proof for a given leaf index
-    pub fn generate_proof(&self, leaf_index: u32) -> Option<(Vec<BytesN<32>>, u32)> {
+    pub fn generate_proof(&self, leaf_index: u32) -> Option<(alloc::vec::Vec<BlsScalar>, u32)> {
         if leaf_index >= self.leaves.len() as u32 {
             return None;
         }
 
-        let mut siblings = vec![&self.env];
+        let mut siblings = alloc::vec::Vec::new();
         
         // Handle the simple 2-leaf case correctly
         if self.depth == 1 && self.leaves.len() == 2 {
             if leaf_index == 0 {
-                siblings.push_back(self.leaves.get(1).unwrap());
+                let sibling_bytes = self.leaves.get(1).unwrap();
+                siblings.push(bytes_to_bls_scalar(&sibling_bytes));
             } else {
-                siblings.push_back(self.leaves.get(0).unwrap());
+                let sibling_bytes = self.leaves.get(0).unwrap();
+                siblings.push(bytes_to_bls_scalar(&sibling_bytes));
             }
-            
-            siblings.push_back(self.root.clone());
         } else {
             // General approach
             let mut current_index = leaf_index;
@@ -133,25 +133,22 @@ impl<'a> LeanIMT<'a> {
                     current_index - 1
                 };
                 
-                let sibling = if current_depth == 0 {
+                let sibling_scalar = if current_depth == 0 {
                     // At leaf level, use actual leaves or zero if missing
                     if sibling_index < self.leaves.len() as u32 {
-                        self.leaves.get(sibling_index).unwrap()
+                        let sibling_bytes = self.leaves.get(sibling_index).unwrap();
+                        bytes_to_bls_scalar(&sibling_bytes)
                     } else {
-                        BytesN::from_array(&self.env, &[0u8; 32])
+                        BlsScalar::from(0u64)
                     }
                 } else {
                     // At internal levels, compute the actual node value
-                    self.compute_node_at_level(sibling_index, current_depth)
+                    self.compute_node_at_level_scalar(sibling_index, current_depth)
                 };
                 
-                siblings.push_back(sibling);
+                siblings.push(sibling_scalar);
                 current_index = current_index / 2;
                 current_depth += 1;
-            }
-            
-            if self.depth > 0 {
-                siblings.push_back(self.root.clone());
             }
         }
 

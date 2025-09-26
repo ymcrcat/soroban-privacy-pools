@@ -153,21 +153,12 @@ fn withdraw_coin(coin: &CoinData, state_file: &StateFile) -> Result<SnarkInput, 
     // Generate merkle proof using lean-imt
     let proof = tree.generate_proof(commitment_index as u32)
         .ok_or_else(|| "Failed to generate merkle proof".to_string())?;
-    let (siblings_bytes, _depth) = proof;
+    let (siblings_scalars, _depth) = proof;
     
-    // Convert siblings from BytesN<32> to Fr and then to strings
-    let siblings: Vec<Fr> = siblings_bytes.iter()
-        .map(|bytes| lean_imt::bytes_to_bls_scalar(&bytes))
+    // Convert siblings from BlsScalar to Fr and then to strings
+    let siblings: Vec<Fr> = siblings_scalars.iter()
+        .map(|s| *s)
         .collect();
-    
-    // Pad siblings to 20 elements (maxTreeDepth)
-    let mut padded_siblings = siblings.into_iter()
-        .map(|s| s.into_bigint().to_string())
-        .collect::<Vec<String>>();
-    
-    while padded_siblings.len() < 20 {
-        padded_siblings.push("0".to_string());
-    }
 
     // Get the root from lean-imt
     let root_scalar = lean_imt::bytes_to_bls_scalar(&tree.get_root());
@@ -180,7 +171,9 @@ fn withdraw_coin(coin: &CoinData, state_file: &StateFile) -> Result<SnarkInput, 
         secret: secret.into_bigint().to_string(),
         state_root: root_scalar.into_bigint().to_string(),
         state_index: commitment_index.to_string(),
-        state_siblings: padded_siblings,
+        state_siblings: siblings.into_iter()
+            .map(|s| s.into_bigint().to_string())
+            .collect(),
     })
 }
 

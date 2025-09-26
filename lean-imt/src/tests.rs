@@ -102,27 +102,23 @@ fn test_generate_proof_two_leaves() {
     assert!(proof_0.is_some());
     let (siblings_0, depth_0) = proof_0.unwrap();
     assert_eq!(depth_0, 1);
-    assert_eq!(siblings_0.len(), 2); // 1 sibling + 1 root
+    assert_eq!(siblings_0.len(), 1); // 1 sibling only (no root)
     
     // Test proof for leaf 1
     let proof_1 = tree.generate_proof(1);
     assert!(proof_1.is_some());
     let (siblings_1, depth_1) = proof_1.unwrap();
     assert_eq!(depth_1, 1);
-    assert_eq!(siblings_1.len(), 2); // 1 sibling + 1 root
+    assert_eq!(siblings_1.len(), 1); // 1 sibling only (no root)
     
     // Verify siblings are correct (should be the other leaf)
-    let leaf_1_bytes = bls_scalar_to_bytes(&tree.env, u64_to_bls_scalar(2));
-    let leaf_0_bytes = bls_scalar_to_bytes(&tree.env, u64_to_bls_scalar(1));
+    let leaf_1_scalar = u64_to_bls_scalar(2);
+    let leaf_0_scalar = u64_to_bls_scalar(1);
     
     // For leaf 0, sibling should be leaf 1
-    assert_eq!(siblings_0.get(0).unwrap(), leaf_1_bytes);
+    assert_eq!(*siblings_0.get(0).unwrap(), leaf_1_scalar);
     // For leaf 1, sibling should be leaf 0
-    assert_eq!(siblings_1.get(0).unwrap(), leaf_0_bytes);
-    
-    // Both should have the same root
-    assert_eq!(siblings_0.get(1).unwrap(), siblings_1.get(1).unwrap());
-    assert_eq!(siblings_0.get(1).unwrap(), tree.get_root());
+    assert_eq!(*siblings_1.get(0).unwrap(), leaf_0_scalar);
 }
 
 #[test]
