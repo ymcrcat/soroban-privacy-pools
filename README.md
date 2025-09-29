@@ -606,8 +606,8 @@ echo "🔄 Converting proof for Soroban..."
 cargo run --bin circom2soroban proof circuits/proof.json > proof_hex.txt || { echo "❌ Error: Failed to convert proof"; exit 1; }
 cargo run --bin circom2soroban public circuits/public.json > public_hex.txt || { echo "❌ Error: Failed to convert public signals"; exit 1; }
 
-PROOF_HEX=$(cat proof_hex.txt | grep -o '[0-9a-f]*$')
-PUBLIC_HEX=$(cat public_hex.txt | grep -o '[0-9a-f]*$')
+PROOF_HEX=$(grep "Proof Hex encoding:" proof_hex.txt | sed 's/.*Proof Hex encoding://' | tr -d '[:space:]')
+PUBLIC_HEX=$(grep "Public signals Hex encoding:" public_hex.txt | sed 's/.*Public signals Hex encoding://' | tr -d '[:space:]')
 
 if [ -z "$PROOF_HEX" ] || [ -z "$PUBLIC_HEX" ]; then
     echo "❌ Error: Failed to extract proof or public signals"
