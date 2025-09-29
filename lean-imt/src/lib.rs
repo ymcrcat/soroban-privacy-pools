@@ -45,7 +45,7 @@ impl<'a> LeanIMT<'a> {
             leaves: vec![env],
             depth,
             root: BytesN::from_array(env, &[0u8; 32]),
-            poseidon: Poseidon255::new(env),
+            poseidon: Poseidon255::new_with_t(env, 3),
         };
         tree.recompute_tree();
         tree
@@ -223,7 +223,7 @@ impl<'a> LeanIMT<'a> {
             leaves,
             depth,
             root,
-            poseidon: Poseidon255::new(env),
+            poseidon: Poseidon255::new_with_t(env, 3),
         }
     }
 

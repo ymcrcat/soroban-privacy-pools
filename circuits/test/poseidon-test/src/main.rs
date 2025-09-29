@@ -102,7 +102,7 @@ fn main() {
     let output1 = poseidon1.hash(&input1_scalar);
     let decimal_output1 = bls_scalar_to_decimal(output1);
 
-    let poseidon2 = Poseidon255::new(&env);
+    let poseidon2 = Poseidon255::new_with_t(&env, 3);
     let output2 = poseidon2.hash_two(&input1_scalar, &input2_scalar);
     let decimal_output2 = bls_scalar_to_decimal(output2);
 

@@ -517,7 +517,7 @@ impl<'a> Poseidon255<'a> {
     /// Hash two inputs using t=3 (2 inputs + 1 capacity)
     pub fn hash_two(&self, input1: &BlsScalar, input2: &BlsScalar) -> BlsScalar {
         // Create a new Poseidon instance with t=3 for two inputs
-        let poseidon_t3 = Poseidon255::new_with_t(self.env, 3);
+        // let poseidon_t3 = Poseidon255::new_with_t(self.env, 3);
         
         // For t=3, we have 2 inputs + 1 capacity element
         // Initialize state as [capacity, input1, input2]
@@ -525,11 +525,11 @@ impl<'a> Poseidon255<'a> {
         let mut state = vec![self.env, zero, input1.clone(), input2.clone()];
         
         // Apply all rounds with correct full/partial structure for t=3
-        for round in 0..poseidon_t3.round_constants.len() / 3 {
+        for round in 0..self.round_constants.len() / 3 {
             // Add round constants
             for i in 0..3 {
-                if round * 3 + i < poseidon_t3.round_constants.len() {
-                    state.set(i, state.get(i).unwrap() + poseidon_t3.round_constants.get(round * 3 + i).unwrap());
+                if round * 3 + i < self.round_constants.len() {
+                    state.set(i, state.get(i).unwrap() + self.round_constants.get(round * 3 + i).unwrap());
                 }
             }
             
@@ -550,7 +550,7 @@ impl<'a> Poseidon255<'a> {
             for i in 0..3 {
                 let mut sum = BlsScalar::from_u256(U256::from_u32(self.env, 0));
                 for j in 0..3 {
-                    sum = sum + state.get(j).unwrap() * poseidon_t3.mds_matrix.get(i).unwrap().get(j).unwrap();
+                    sum = sum + state.get(j).unwrap() * self.mds_matrix.get(i).unwrap().get(j).unwrap();
                 }
                 new_state.push_back(sum);
             }
@@ -564,37 +564,49 @@ impl<'a> Poseidon255<'a> {
     /// Parse a hex string into a BlsScalar
     /// This can handle large hex values that exceed u64/u128 range
     fn parse_hex_to_scalar(env: &Env, hex_str: &str) -> BlsScalar {
-        // Remove 0x prefix if present
         let hex_str = hex_str.trim_start_matches("0x");
-        
-        // Convert hex string to bytes (big-endian first, then reverse for little-endian)
         let mut bytes = [0u8; 32];
+        let hex_len = hex_str.len();
         
-        // Parse hex string in big-endian order
-        for i in 0..32 {
-            let start_idx = i * 2;
-            if start_idx + 1 < hex_str.len() {
-                let hex_byte_str = &hex_str[start_idx..start_idx + 2];
-                // Convert hex byte to u8
-                let mut byte_val = 0u8;
-                for c in hex_byte_str.chars() {
-                    let digit = if c >= '0' && c <= '9' {
-                        c as u8 - '0' as u8
-                    } else if c >= 'a' && c <= 'f' {
-                        c as u8 - 'a' as u8 + 10
-                    } else if c >= 'A' && c <= 'F' {
-                        c as u8 - 'A' as u8 + 10
-                    } else {
-                        0
-                    };
-                    byte_val = byte_val * 16 + digit;
-                }
-                bytes[i as usize] = byte_val;
-            }
+        // Calculate how many bytes we'll actually parse
+        let num_bytes = (hex_len + 1) / 2;
+        
+        // Right-align the bytes (pad with zeros on the left for shorter hex strings)
+        let offset = 32 - num_bytes;
+        
+        // Parse hex string pairs from left to right
+        for i in 0..num_bytes {
+            let hex_start = i * 2;
+            let hex_end = (hex_start + 2).min(hex_len);
+            
+            // Parse this hex byte
+            let hex_byte = &hex_str[hex_start..hex_end];
+            bytes[offset + i] = Self::parse_hex_byte(hex_byte);
         }
         
-        // Convert bytes to BlsScalar using from_bytes
         BlsScalar::from_bytes(BytesN::from_array(env, &bytes))
+    }
+    
+    #[inline]
+    fn parse_hex_byte(hex_byte: &str) -> u8 {
+        let bytes = hex_byte.as_bytes();
+        let high = Self::hex_char_to_nibble(bytes[0]);
+        let low = if bytes.len() > 1 {
+            Self::hex_char_to_nibble(bytes[1])
+        } else {
+            0
+        };
+        (high << 4) | low
+    }
+    
+    #[inline]
+    fn hex_char_to_nibble(c: u8) -> u8 {
+        match c {
+            b'0'..=b'9' => c - b'0',
+            b'a'..=b'f' => c - b'a' + 10,
+            b'A'..=b'F' => c - b'A' + 10,
+            _ => 0,
+        }
     }
 
 
@@ -608,7 +620,7 @@ mod tests {
     #[test]
     fn test_hash_two_basic() {
         let env = Env::default();
-        let poseidon = Poseidon255::new(&env);
+        let poseidon = Poseidon255::new_with_t(&env, 3);
         let input1 = BlsScalar::from_u256(U256::from_u32(&env, 123));
         let input2 = BlsScalar::from_u256(U256::from_u32(&env, 456));
         
@@ -629,7 +641,7 @@ mod tests {
     #[test]
     fn test_hash_two_different_inputs() {
         let env = Env::default();
-        let poseidon = Poseidon255::new(&env);
+        let poseidon = Poseidon255::new_with_t(&env, 3);
         let input1 = BlsScalar::from_u256(U256::from_u32(&env, 123));
         let input2 = BlsScalar::from_u256(U256::from_u32(&env, 456));
         let input3 = BlsScalar::from_u256(U256::from_u32(&env, 789));
