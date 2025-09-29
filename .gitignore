@@ -6,6 +6,8 @@ circuits/build
 circuits/output
 circuits/input
 circuits/test/node_modules
+circuits/*.wtns
+circuits/test/*.wtns
 # Local settings
 .soroban
 .stellar
