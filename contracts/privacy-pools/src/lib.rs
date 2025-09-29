@@ -10,6 +10,7 @@ use soroban_sdk::{
 
 use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
 use lean_imt::{LeanIMT, TREE_ROOT_KEY, TREE_DEPTH_KEY, TREE_LEAVES_KEY};
+use num_bigint::BigUint;
 
 #[cfg(test)]
 mod test;
@@ -269,36 +270,10 @@ impl PrivacyPoolsContract {
     }
 
     /// Helper function to convert bytes to decimal string for logging
+    /// Uses num-bigint for efficient conversion
     fn bytes_to_decimal_string(env: &Env, bytes: &[u8; 32]) -> String {
-        // Convert 32 bytes to decimal string using a simple approach
-        // We'll build the decimal string by processing the bytes in chunks
-        let mut result = alloc::vec![0u8; 80]; // Max decimal digits for 256-bit number
-        let mut len = 1;
-        result[0] = 0; // Start with 0
-        
-        for &byte in bytes.iter() {
-            // Multiply current result by 256 and add current byte
-            let mut carry = byte as u16;
-            for i in 0..len {
-                let temp = result[i] as u16 * 256 + carry;
-                result[i] = (temp % 10) as u8;
-                carry = temp / 10;
-            }
-            
-            // Handle remaining carry
-            while carry > 0 {
-                result[len] = (carry % 10) as u8;
-                carry /= 10;
-                len += 1;
-            }
-        }
-        
-        // Convert to string (reverse order since we built it backwards)
-        let mut decimal_chars = alloc::vec![0u8; len];
-        for i in 0..len {
-            decimal_chars[i] = b'0' + result[len - 1 - i];
-        }
-        
-        String::from_str(env, core::str::from_utf8(&decimal_chars).unwrap())
+        let biguint = BigUint::from_bytes_be(bytes);
+        let decimal_str = biguint.to_str_radix(10);
+        String::from_str(env, &decimal_str)
     }
 }

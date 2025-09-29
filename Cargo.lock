@@ -361,6 +361,7 @@ version = "0.1.0"
 dependencies = [
  "hex",
  "lean-imt",
+ "num-bigint",
  "poseidon",
  "rand",
  "serde",
@@ -1078,6 +1079,7 @@ dependencies = [
  "ark-serialize",
  "hex",
  "lean-imt",
+ "num-bigint",
  "soroban-sdk",
  "zk",
 ]

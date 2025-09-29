@@ -8,6 +8,7 @@ use serde::{Serialize, Deserialize};
 use std::fs::File;
 use std::io::Write;
 use lean_imt::LeanIMT;
+use num_bigint::BigUint;
 
 const COIN_VALUE: i128 = 1000000000; // 1 XLM in stroops
 const TREE_DEPTH: u32 = 2;
@@ -142,37 +143,10 @@ fn bls_scalar_to_decimal_string(scalar: &BlsScalar) -> String {
 }
 
 /// Helper function to convert bytes to decimal string
+/// Uses num-bigint for efficient conversion
 fn bytes_to_decimal_string(bytes: &[u8; 32]) -> String {
-    // Convert 32 bytes to decimal string using a simple approach
-    // We'll build the decimal string by processing the bytes in chunks
-    let mut result = vec![0u8; 80]; // Max decimal digits for 256-bit number
-    let mut len = 1;
-    result[0] = 0; // Start with 0
-    
-    for &byte in bytes.iter() {
-        // Multiply current result by 256 and add current byte
-        let mut carry = byte as u16;
-        for i in 0..len {
-            let temp = result[i] as u16 * 256 + carry;
-            result[i] = (temp % 10) as u8;
-            carry = temp / 10;
-        }
-        
-        // Handle remaining carry
-        while carry > 0 {
-            result[len] = (carry % 10) as u8;
-            carry /= 10;
-            len += 1;
-        }
-    }
-    
-    // Convert to string (reverse order since we built it backwards)
-    let mut decimal_chars = vec![0u8; len];
-    for i in 0..len {
-        decimal_chars[i] = b'0' + result[len - 1 - i];
-    }
-    
-    String::from_utf8(decimal_chars).unwrap()
+    let biguint = BigUint::from_bytes_be(bytes);
+    biguint.to_str_radix(10)
 }
 
 fn generate_label(env: &Env, scope: &[u8], nonce: &[u8; 32]) -> BlsScalar {
