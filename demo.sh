@@ -2,7 +2,7 @@
 set -e
 echo "🚀 Starting Privacy Pool Demo..."
 
-NETWORK=local # testnet, local
+NETWORK=testnet # testnet, local
 
 # Check prerequisites
 echo "🔍 Checking prerequisites..."
