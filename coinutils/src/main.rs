@@ -73,22 +73,106 @@ fn poseidon_hash(env: &Env, inputs: &[BlsScalar]) -> BlsScalar {
 }
 
 
-fn hex_string_to_bls_scalar(env: &Env, hex_str: &str) -> Result<BlsScalar, String> {
-    // Remove 0x prefix if present
-    let hex_str = hex_str.trim_start_matches("0x");
+
+fn decimal_string_to_bls_scalar(env: &Env, decimal_str: &str) -> Result<BlsScalar, String> {
+    // For now, let's use a simpler approach that works with the existing system
+    // We'll convert the decimal to a u128 first, then to BlsScalar
+    if let Ok(value) = decimal_str.parse::<u128>() {
+        // Convert u128 to BlsScalar
+        return Ok(BlsScalar::from_u256(U256::from_u32(env, value as u32)));
+    }
     
-    // Parse hex string to bytes
-    let bytes = hex::decode(hex_str)
-        .map_err(|e| format!("Invalid hex string: {:?}", e))?;
+    // For very large numbers, we need to handle them differently
+    // Since the decimal numbers are too large for u128, we'll use a workaround
+    // by converting through the existing hex conversion system
+    
+    // First, let's try to convert the decimal to hex manually
+    let mut temp = decimal_str.to_string();
+    let mut hex_digits = String::new();
+    
+    while !temp.is_empty() && temp != "0" {
+        let mut carry = 0u32;
+        let mut new_temp = String::new();
+        
+        for ch in temp.chars() {
+            let digit = ch.to_digit(10).ok_or_else(|| "Invalid decimal character")? as u32;
+            let value = carry * 10 + digit;
+            new_temp.push((b'0' + (value / 16) as u8) as char);
+            carry = value % 16;
+        }
+        
+        // Remove leading zeros
+        while new_temp.len() > 1 && new_temp.starts_with('0') {
+            new_temp.remove(0);
+        }
+        
+        if new_temp.is_empty() {
+            new_temp = "0".to_string();
+        }
+        
+        temp = new_temp;
+        hex_digits.push_str(&format!("{:x}", carry));
+    }
+    
+    // Reverse the hex string since we built it backwards
+    let hex_str: String = hex_digits.chars().rev().collect();
+    
+    // Pad to 64 hex characters (32 bytes)
+    let padded_hex = format!("{:0>64}", hex_str);
+    
+    // Convert hex to bytes
+    let bytes = hex::decode(&padded_hex)
+        .map_err(|e| format!("Hex conversion failed: {:?}", e))?;
     
     if bytes.len() != 32 {
-        return Err(format!("Hex string must be 32 bytes, got {}", bytes.len()));
+        return Err("Invalid byte length".to_string());
     }
     
     let mut byte_array = [0u8; 32];
     byte_array.copy_from_slice(&bytes);
     
     Ok(BlsScalar::from_bytes(BytesN::from_array(env, &byte_array)))
+}
+
+
+/// Helper function to convert BlsScalar to decimal string
+fn bls_scalar_to_decimal_string(scalar: &BlsScalar) -> String {
+    let array = scalar.to_bytes().to_array();
+    bytes_to_decimal_string(&array)
+}
+
+/// Helper function to convert bytes to decimal string
+fn bytes_to_decimal_string(bytes: &[u8; 32]) -> String {
+    // Convert 32 bytes to decimal string using a simple approach
+    // We'll build the decimal string by processing the bytes in chunks
+    let mut result = vec![0u8; 80]; // Max decimal digits for 256-bit number
+    let mut len = 1;
+    result[0] = 0; // Start with 0
+    
+    for &byte in bytes.iter() {
+        // Multiply current result by 256 and add current byte
+        let mut carry = byte as u16;
+        for i in 0..len {
+            let temp = result[i] as u16 * 256 + carry;
+            result[i] = (temp % 10) as u8;
+            carry = temp / 10;
+        }
+        
+        // Handle remaining carry
+        while carry > 0 {
+            result[len] = (carry % 10) as u8;
+            carry /= 10;
+            len += 1;
+        }
+    }
+    
+    // Convert to string (reverse order since we built it backwards)
+    let mut decimal_chars = vec![0u8; len];
+    for i in 0..len {
+        decimal_chars[i] = b'0' + result[len - 1 - i];
+    }
+    
+    String::from_utf8(decimal_chars).unwrap()
 }
 
 fn generate_label(env: &Env, scope: &[u8], nonce: &[u8; 32]) -> BlsScalar {
@@ -118,32 +202,32 @@ fn generate_coin(env: &Env, scope: &[u8]) -> GeneratedCoin {
     let label = generate_label(env, scope, &nonce);
     let commitment = generate_commitment(env, value.clone(), label.clone(), nullifier.clone(), secret.clone());
 
-    let value_hex = hex::encode(value.to_bytes().to_array());
-    let nullifier_hex = hex::encode(nullifier.to_bytes().to_array());
-    let secret_hex = hex::encode(secret.to_bytes().to_array());
-    let label_hex = hex::encode(label.to_bytes().to_array());
-    let commitment_hex = hex::encode(commitment.to_bytes().to_array());
+    let value_decimal = bls_scalar_to_decimal_string(&value);
+    let nullifier_decimal = bls_scalar_to_decimal_string(&nullifier);
+    let secret_decimal = bls_scalar_to_decimal_string(&secret);
+    let label_decimal = bls_scalar_to_decimal_string(&label);
+    let commitment_decimal = bls_scalar_to_decimal_string(&commitment);
 
     let coin_data = CoinData {
-        value: value_hex,
-        nullifier: nullifier_hex,
-        secret: secret_hex,
-        label: label_hex,
-        commitment: commitment_hex.clone(),
+        value: value_decimal,
+        nullifier: nullifier_decimal,
+        secret: secret_decimal,
+        label: label_decimal,
+        commitment: commitment_decimal,
     };
 
     GeneratedCoin {
         coin: coin_data,
-        commitment_hex: format!("0x{}", commitment_hex),
+        commitment_hex: format!("0x{}", hex::encode(commitment.to_bytes().to_array())),
     }
 }
 
 fn withdraw_coin(env: &Env, coin: &CoinData, state_file: &StateFile) -> Result<SnarkInput, String> {
-    // Parse hex string values to BlsScalar
-    let value = hex_string_to_bls_scalar(env, &coin.value)?;
-    let nullifier = hex_string_to_bls_scalar(env, &coin.nullifier)?;
-    let secret = hex_string_to_bls_scalar(env, &coin.secret)?;
-    let label = hex_string_to_bls_scalar(env, &coin.label)?;
+    // Parse decimal string values to BlsScalar
+    let value = decimal_string_to_bls_scalar(env, &coin.value)?;
+    let nullifier = decimal_string_to_bls_scalar(env, &coin.nullifier)?;
+    let secret = decimal_string_to_bls_scalar(env, &coin.secret)?;
+    let label = decimal_string_to_bls_scalar(env, &coin.label)?;
 
     // Reconstruct the commitment to verify it matches
     let commitment = generate_commitment(env, value.clone(), label.clone(), nullifier.clone(), secret.clone());
@@ -153,7 +237,7 @@ fn withdraw_coin(env: &Env, coin: &CoinData, state_file: &StateFile) -> Result<S
     let mut commitment_index = None;
     
     for (index, commitment_str) in state_file.commitments.iter().enumerate() {
-        let commitment_fr = hex_string_to_bls_scalar(env, commitment_str)
+        let commitment_fr = decimal_string_to_bls_scalar(env, commitment_str)
             .map_err(|e| format!("Invalid commitment at index {}: {}", index, e))?;
         
         // Convert BlsScalar to bytes and insert into lean-imt
@@ -184,22 +268,22 @@ fn withdraw_coin(env: &Env, coin: &CoinData, state_file: &StateFile) -> Result<S
     // Get the root from lean-imt
     let root_scalar = lean_imt::bytes_to_bls_scalar(&tree.get_root());
 
-    let label_hex = hex::encode(label.to_bytes().to_array());
-    let value_hex = hex::encode(value.to_bytes().to_array());
-    let nullifier_hex = hex::encode(nullifier.to_bytes().to_array());
-    let secret_hex = hex::encode(secret.to_bytes().to_array());
-    let state_root_hex = hex::encode(root_scalar.to_bytes().to_array());
+    let label_decimal = bls_scalar_to_decimal_string(&label);
+    let value_decimal = bls_scalar_to_decimal_string(&value);
+    let nullifier_decimal = bls_scalar_to_decimal_string(&nullifier);
+    let secret_decimal = bls_scalar_to_decimal_string(&secret);
+    let state_root_decimal = bls_scalar_to_decimal_string(&root_scalar);
 
     Ok(SnarkInput {
         withdrawn_value: COIN_VALUE.to_string(),
-        label: label_hex,
-        value: value_hex,
-        nullifier: nullifier_hex,
-        secret: secret_hex,
-        state_root: state_root_hex,
+        label: label_decimal,
+        value: value_decimal,
+        nullifier: nullifier_decimal,
+        secret: secret_decimal,
+        state_root: state_root_decimal,
         state_index: commitment_index.to_string(),
         state_siblings: siblings.into_iter()
-            .map(|s| hex::encode(s.to_bytes().to_array()))
+            .map(|s| bls_scalar_to_decimal_string(&s))
             .collect(),
     })
 }
