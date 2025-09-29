@@ -1,13 +1,16 @@
 #!/bin/bash
 set -e
 echo "🚀 Starting Privacy Pool Demo..."
+
+NETWORK=local # testnet, local
+
 # Check prerequisites
 echo "🔍 Checking prerequisites..."
 command -v jq >/dev/null 2>&1 || { echo "❌ Error: jq is required but not installed. Please install jq first."; exit 1; }
 command -v soroban >/dev/null 2>&1 || { echo "❌ Error: soroban CLI is required but not installed."; exit 1; }
 # Fund demo_user account if needed
 echo "🏦 Ensuring demo_user account is funded..."
-soroban keys fund demo_user --network testnet > /dev/null 2>&1 || echo "⚠️  demo_user may already be funded"
+soroban keys fund demo_user --network $NETWORK > /dev/null 2>&1 || echo "⚠️  demo_user may already be funded"
 # Step 1: Deploy contract
 echo "📦 Deploying contract..."
 cargo build --target wasm32v1-none --release -p privacy-pools || { echo "❌ Error: Failed to build contract"; exit 1; }
@@ -20,8 +23,9 @@ if [ -z "$VK_HEX" ]; then
     echo "❌ Error: Failed to extract verification key hex"
     exit 1
 fi
-echo "🚀 Deploying contract to testnet..."
-soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network testnet --instructions 6000000 -- --vk_bytes $VK_HEX || { echo "❌ Error: Failed to deploy contract"; exit 1; }
+
+echo "🚀 Deploying contract to $NETWORK..."
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network $NETWORK -- --vk_bytes $VK_HEX || { echo "❌ Error: Failed to deploy contract"; exit 1; }
 # Save the contract ID for later use
 echo ""
 echo "📋 Please paste the contract ID from the deployment above:"
@@ -42,11 +46,11 @@ fi
 echo "Generated coin with commitment: $COMMITMENT_HEX"
 # Step 3: Deposit
 echo "💰 Depositing coin..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- deposit --from demo_user --commitment $COMMITMENT_HEX || { echo "❌ Error: Failed to deposit coin"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- deposit --from demo_user --commitment $COMMITMENT_HEX || { echo "❌ Error: Failed to deposit coin"; exit 1; }
 echo "Deposit successful!"
 # Step 4: Check balance
 echo "📊 Checking balance..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_balance || { echo "❌ Error: Failed to get balance"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_balance || { echo "❌ Error: Failed to get balance"; exit 1; }
 # Step 5: Create state file and withdrawal proof
 echo "📋 Creating state file..."
 COMMITMENT=$(cat demo_coin.json | jq -r '.coin.commitment')
@@ -67,19 +71,19 @@ cd ..
 echo "🔄 Converting proof for Soroban..."
 cargo run --bin circom2soroban proof circuits/proof.json > proof_hex.txt || { echo "❌ Error: Failed to convert proof"; exit 1; }
 cargo run --bin circom2soroban public circuits/public.json > public_hex.txt || { echo "❌ Error: Failed to convert public signals"; exit 1; }
-PROOF_HEX=$(cat proof_hex.txt | grep -o '[0-9a-f]*$' | tr -d '\n')
-PUBLIC_HEX=$(cat public_hex.txt | grep -o '[0-9a-f]*$' | tr -d '\n')
+PROOF_HEX=$(sed -n '/^Proof Hex encoding:/{n;p;}' proof_hex.txt | tr -d '[:space:]' | sed -E 's/^0x//i')
+PUBLIC_HEX=$(cat public_hex.txt | grep -o '[0-9a-f]*$')
 if [ -z "$PROOF_HEX" ] || [ -z "$PUBLIC_HEX" ]; then
     echo "❌ Error: Failed to extract proof or public signals"
     exit 1
 fi
 # Step 6: Withdraw
 echo "💸 Withdrawing coin..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- withdraw --to demo_user --proof_bytes "$PROOF_HEX" --pub_signals_bytes "$PUBLIC_HEX" || { echo "❌ Error: Failed to withdraw coin"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- withdraw --to demo_user --proof_bytes "$PROOF_HEX" --pub_signals_bytes "$PUBLIC_HEX" || { echo "❌ Error: Failed to withdraw coin"; exit 1; }
 echo "Withdrawal successful!"
 # Step 7: Verify
 echo "✅ Verifying withdrawal..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_nullifiers || { echo "❌ Error: Failed to get nullifiers"; exit 1; }
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_balance || { echo "❌ Error: Failed to get final balance"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_nullifiers || { echo "❌ Error: Failed to get nullifiers"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_balance || { echo "❌ Error: Failed to get final balance"; exit 1; }
 echo "🎉 Demo completed successfully!"
 
