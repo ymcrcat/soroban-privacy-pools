@@ -264,8 +264,7 @@ impl PrivacyPoolsContract {
 
     /// Helper function to convert BlsScalar to decimal string for logging
     fn bls_scalar_to_decimal_string(env: &Env, scalar: &BlsScalar) -> String {
-        let bytes = lean_imt::bls_scalar_to_bytes(scalar.clone());
-        let array = bytes.to_array();
+        let array = scalar.to_bytes().to_array();
         Self::bytes_to_decimal_string(env, &array)
     }
 
