@@ -359,8 +359,6 @@ checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 name = "coinutils"
 version = "0.1.0"
 dependencies = [
- "ark-bls12-381",
- "ark-ff",
  "hex",
  "lean-imt",
  "poseidon",
@@ -882,8 +880,6 @@ dependencies = [
 name = "lean-imt"
 version = "0.1.0"
 dependencies = [
- "ark-bls12-381",
- "ark-ff",
  "poseidon",
  "soroban-sdk",
 ]
@@ -927,8 +923,6 @@ checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
 name = "merkle-tree-tests"
 version = "0.1.0"
 dependencies = [
- "ark-bls12-381",
- "ark-ff",
  "lean-imt",
  "num-bigint",
  "serde",
@@ -1025,8 +1019,6 @@ dependencies = [
 name = "poseidon"
 version = "0.1.0"
 dependencies = [
- "ark-bls12-381",
- "ark-ff",
  "soroban-sdk",
 ]
 
@@ -1034,8 +1026,6 @@ dependencies = [
 name = "poseidon_compat_test"
 version = "0.1.0"
 dependencies = [
- "ark-bls12-381",
- "ark-ff",
  "num-bigint",
  "num-traits",
  "poseidon",

@@ -1,13 +1,9 @@
 #![no_std]
 
-extern crate alloc;
-
 use soroban_sdk::{
-    symbol_short, vec, BytesN, Env, Symbol, Vec,
+    symbol_short, vec, BytesN, Env, Symbol, Vec, U256,
+    crypto::bls12_381::Fr as BlsScalar,
 };
-
-use ark_bls12_381::Fr as BlsScalar;
-use ark_ff::{PrimeField, BigInteger};
 use poseidon::Poseidon255;
 
 /// Storage keys for the LeanIMT
@@ -16,36 +12,18 @@ pub const TREE_DEPTH_KEY: Symbol = symbol_short!("depth");
 pub const TREE_LEAVES_KEY: Symbol = symbol_short!("leaves");
 
 /// Converts u64 to BlsScalar for test compatibility
-pub fn u64_to_bls_scalar(value: u64) -> BlsScalar {
-    BlsScalar::from(value)
+pub fn u64_to_bls_scalar(env: &Env, value: u64) -> BlsScalar {
+    BlsScalar::from_u256(U256::from_u32(env, value as u32))
 }
 
 /// Converts BlsScalar to BytesN<32> for Soroban storage
-pub fn bls_scalar_to_bytes(env: &Env, scalar: BlsScalar) -> BytesN<32> {
-    let bigint = scalar.into_bigint();
-    let bytes_vec = bigint.to_bytes_be();
-    let bytes_array: [u8; 32] = bytes_vec.try_into()
-        .expect("BlsScalar should always convert to a 32-byte array");
-    BytesN::from_array(env, &bytes_array)
+pub fn bls_scalar_to_bytes(scalar: BlsScalar) -> BytesN<32> {
+    scalar.to_bytes()
 }
 
 /// Converts BytesN<32> to BlsScalar for computation
 pub fn bytes_to_bls_scalar(bytes_n: &BytesN<32>) -> BlsScalar {
-    let bytes_array: [u8; 32] = bytes_n.to_array();
-    // Convert 32 bytes to 4 u64 values for BigInt (big-endian)
-    let mut u64_array = [0u64; 4];
-    for i in 0..4 {
-        let start = i * 8;
-        let end = start + 8;
-        if end <= bytes_array.len() {
-            let mut chunk = [0u8; 8];
-            chunk.copy_from_slice(&bytes_array[start..end]);
-            u64_array[3 - i] = u64::from_be_bytes(chunk); // Reverse order for little-endian BigInt
-        }
-    }
-    
-    let bigint = ark_ff::BigInt::new(u64_array);
-    BlsScalar::from_bigint(bigint).unwrap_or(BlsScalar::from(0u64))
+    BlsScalar::from_bytes(bytes_n.clone())
 }
 
 /// Lean Incremental Merkle Tree implementation with hybrid approach:
@@ -56,6 +34,7 @@ pub struct LeanIMT<'a> {
     leaves: Vec<BytesN<32>>,
     depth: u32,
     root: BytesN<32>,
+    poseidon: Poseidon255<'a>,
 }
 
 impl<'a> LeanIMT<'a> {
@@ -66,6 +45,7 @@ impl<'a> LeanIMT<'a> {
             leaves: vec![env],
             depth,
             root: BytesN::from_array(env, &[0u8; 32]),
+            poseidon: Poseidon255::new(env),
         };
         tree.recompute_tree();
         tree
@@ -79,8 +59,8 @@ impl<'a> LeanIMT<'a> {
 
     /// Inserts a u64 leaf (converts to BlsScalar internally)
     pub fn insert_u64(&mut self, leaf_value: u64) {
-        let leaf_scalar = u64_to_bls_scalar(leaf_value);
-        let leaf_bytes = bls_scalar_to_bytes(&self.env, leaf_scalar);
+        let leaf_scalar = u64_to_bls_scalar(self.env, leaf_value);
+        let leaf_bytes = bls_scalar_to_bytes(leaf_scalar);
         self.insert(leaf_bytes);
     }
 
@@ -105,21 +85,21 @@ impl<'a> LeanIMT<'a> {
     }
 
     /// Generates a merkle proof for a given leaf index
-    pub fn generate_proof(&self, leaf_index: u32) -> Option<(alloc::vec::Vec<BlsScalar>, u32)> {
+    pub fn generate_proof(&self, leaf_index: u32) -> Option<(Vec<BlsScalar>, u32)> {
         if leaf_index >= self.leaves.len() as u32 {
             return None;
         }
 
-        let mut siblings = alloc::vec::Vec::new();
+        let mut siblings = vec![self.env];
         
         // Handle the simple 2-leaf case correctly
         if self.depth == 1 && self.leaves.len() == 2 {
             if leaf_index == 0 {
                 let sibling_bytes = self.leaves.get(1).unwrap();
-                siblings.push(bytes_to_bls_scalar(&sibling_bytes));
+                siblings.push_back(bytes_to_bls_scalar(&sibling_bytes));
             } else {
                 let sibling_bytes = self.leaves.get(0).unwrap();
-                siblings.push(bytes_to_bls_scalar(&sibling_bytes));
+                siblings.push_back(bytes_to_bls_scalar(&sibling_bytes));
             }
         } else {
             // General approach
@@ -139,14 +119,14 @@ impl<'a> LeanIMT<'a> {
                         let sibling_bytes = self.leaves.get(sibling_index).unwrap();
                         bytes_to_bls_scalar(&sibling_bytes)
                     } else {
-                        BlsScalar::from(0u64)
+                        BlsScalar::from_u256(U256::from_u32(self.env, 0))
                     }
                 } else {
                     // At internal levels, compute the actual node value
                     self.compute_node_at_level_scalar(sibling_index, current_depth)
                 };
                 
-                siblings.push(sibling_scalar);
+                siblings.push_back(sibling_scalar);
                 current_index = current_index / 2;
                 current_depth += 1;
             }
@@ -158,7 +138,7 @@ impl<'a> LeanIMT<'a> {
     /// Computes the value of an internal node at a specific level
     fn compute_node_at_level(&self, node_index: u32, target_level: u32) -> BytesN<32> {
         let result_scalar = self.compute_node_at_level_scalar(node_index, target_level);
-        bls_scalar_to_bytes(&self.env, result_scalar)
+        bls_scalar_to_bytes(result_scalar)
     }
 
     /// Computes the value of an internal node at a specific level in BlsScalar space
@@ -168,10 +148,10 @@ impl<'a> LeanIMT<'a> {
                 let leaf_bytes = self.leaves.get(node_index).unwrap();
                 bytes_to_bls_scalar(&leaf_bytes)
             } else {
-                BlsScalar::from(0u64)
+                BlsScalar::from_u256(U256::from_u32(self.env, 0))
             }
         } else if target_level > self.depth {
-            BlsScalar::from(0u64)
+            BlsScalar::from_u256(U256::from_u32(self.env, 0))
         } else {
             // For levels > 0, compute by hashing the two children from the level below
             let left_child_index = node_index * 2;
@@ -189,28 +169,28 @@ impl<'a> LeanIMT<'a> {
         let target_leaf_count: usize = if self.depth == 0 { 1 } else { 1usize << (self.depth as usize) };
 
         // Build leaf level with explicit leaves followed by zeros
-        let mut current_level_scalars: alloc::vec::Vec<BlsScalar> = alloc::vec::Vec::with_capacity(target_leaf_count);
+        let mut current_level_scalars = vec![self.env];
         for i in 0..target_leaf_count {
             if i < (self.leaves.len() as usize) {
                 let leaf_bytes = self.leaves.get(i as u32).unwrap();
                 let leaf_scalar = bytes_to_bls_scalar(&leaf_bytes);
-                current_level_scalars.push(leaf_scalar);
+                current_level_scalars.push_back(leaf_scalar);
             } else {
-                current_level_scalars.push(BlsScalar::from(0u64));
+                current_level_scalars.push_back(BlsScalar::from_u256(U256::from_u32(self.env, 0)));
             }
         }
         
         // Compute up the tree for exactly self.depth levels
         for _level in 0..self.depth {
-            let mut next_level_scalars: alloc::vec::Vec<BlsScalar> = alloc::vec::Vec::new();
+            let mut next_level_scalars = vec![self.env];
             let mut i: usize = 0;
             
-            while i < current_level_scalars.len() {
-                if i + 1 < current_level_scalars.len() {
-                    let hash_scalar = self.hash_pair(current_level_scalars[i], current_level_scalars[i + 1]);
-                    next_level_scalars.push(hash_scalar);
+            while i < current_level_scalars.len() as usize {
+                if i + 1 < current_level_scalars.len() as usize {
+                    let hash_scalar = self.hash_pair(current_level_scalars.get(i as u32).unwrap(), current_level_scalars.get((i + 1) as u32).unwrap());
+                    next_level_scalars.push_back(hash_scalar);
                 } else {
-                    next_level_scalars.push(current_level_scalars[i]);
+                    next_level_scalars.push_back(current_level_scalars.get(i as u32).unwrap());
                 }
                 i += 2;
             }
@@ -220,16 +200,15 @@ impl<'a> LeanIMT<'a> {
 
         // Final root (if depth == 0, it's the single leaf or zero)
         if current_level_scalars.len() > 0 {
-            self.root = bls_scalar_to_bytes(&self.env, current_level_scalars[0]);
+            self.root = bls_scalar_to_bytes(current_level_scalars.get(0).unwrap());
         } else {
-            self.root = BytesN::from_array(&self.env, &[0u8; 32]);
+            self.root = BytesN::from_array(self.env, &[0u8; 32]);
         }
     }
 
     /// Hashes two BlsScalar values using Poseidon hash function
     fn hash_pair(&self, left: BlsScalar, right: BlsScalar) -> BlsScalar {
-        let poseidon = Poseidon255::new();
-        poseidon.hash_two(&left, &right)
+        self.poseidon.hash_two(&left, &right)
     }
 
     /// Serializes the tree state for storage
@@ -244,6 +223,7 @@ impl<'a> LeanIMT<'a> {
             leaves,
             depth,
             root,
+            poseidon: Poseidon255::new(env),
         }
     }
 

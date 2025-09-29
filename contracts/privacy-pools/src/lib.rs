@@ -4,12 +4,12 @@ extern crate alloc;
 
 use soroban_sdk::{
     contract, contractimpl, 
-    vec, Env, String, Vec, Address, symbol_short, Symbol, Bytes, BytesN
+    vec, Env, String, Vec, Address, symbol_short, Symbol, Bytes, BytesN,
+    crypto::bls12_381::Fr as BlsScalar,
 };
 
 use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
 use lean_imt::{LeanIMT, TREE_ROOT_KEY, TREE_DEPTH_KEY, TREE_LEAVES_KEY};
-use ark_bls12_381::Fr as BlsScalar;
 
 #[cfg(test)]
 mod test;
@@ -264,7 +264,7 @@ impl PrivacyPoolsContract {
 
     /// Helper function to convert BlsScalar to decimal string for logging
     fn bls_scalar_to_decimal_string(env: &Env, scalar: &BlsScalar) -> String {
-        let bytes = lean_imt::bls_scalar_to_bytes(env, *scalar);
+        let bytes = lean_imt::bls_scalar_to_bytes(scalar.clone());
         let array = bytes.to_array();
         Self::bytes_to_decimal_string(env, &array)
     }

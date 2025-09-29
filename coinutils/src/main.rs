@@ -1,14 +1,13 @@
-use ark_bls12_381::Fr;
-use ark_ff::PrimeField;
+use soroban_sdk::{
+    crypto::bls12_381::Fr as BlsScalar,
+    Env, BytesN, U256,
+};
 use rand::{thread_rng, Rng};
 use poseidon::Poseidon255;
-use ark_ff::biginteger::BigInteger;
 use serde::{Serialize, Deserialize};
 use std::fs::File;
 use std::io::Write;
-use std::str::FromStr;
 use lean_imt::LeanIMT;
-use soroban_sdk::Env;
 
 const COIN_VALUE: i128 = 1000000000; // 1 XLM in stroops
 const TREE_DEPTH: u32 = 2;
@@ -26,7 +25,7 @@ struct SnarkInput {
     #[serde(rename = "stateIndex")]
     state_index: String,
     #[serde(rename = "stateSiblings")]
-    state_siblings: Vec<String>,
+    state_siblings: std::vec::Vec<String>,
 }
 
 #[derive(Serialize, serde::Deserialize)]
@@ -46,25 +45,25 @@ struct GeneratedCoin {
 
 #[derive(Serialize, Deserialize)]
 struct StateFile {
-    commitments: Vec<String>,
+    commitments: std::vec::Vec<String>,
     scope: String,
 }
 
-fn random_fr() -> Fr {
+fn random_fr(env: &Env) -> BlsScalar {
     let mut rng = thread_rng();
-    Fr::from(rng.gen::<u64>())
+    BlsScalar::from_u256(U256::from_u32(env, rng.gen::<u32>()))
 }
 
 // Poseidon-based hash for field elements
-fn poseidon_hash(inputs: &[Fr]) -> Fr {
-    let poseidon = Poseidon255::new();
+fn poseidon_hash(env: &Env, inputs: &[BlsScalar]) -> BlsScalar {
+    let poseidon = Poseidon255::new(env);
     
     match inputs.len() {
         1 => poseidon.hash(&inputs[0]),
         2 => poseidon.hash_two(&inputs[0], &inputs[1]),
         _ => {
             // For more than 2 inputs, hash them sequentially
-            let mut result = inputs[0];
+            let mut result = inputs[0].clone();
             for input in inputs.iter().skip(1) {
                 result = poseidon.hash_two(&result, input);
             }
@@ -73,70 +72,92 @@ fn poseidon_hash(inputs: &[Fr]) -> Fr {
     }
 }
 
-fn to_bytesn32(fr: &Fr) -> [u8; 32] {
-    let mut bytes = [0u8; 32];
-    let fr_bytes = fr.into_bigint().to_bytes_be();
-    let offset = 32 - fr_bytes.len();
-    bytes[offset..].copy_from_slice(&fr_bytes);
-    bytes
+
+fn hex_string_to_bls_scalar(env: &Env, hex_str: &str) -> Result<BlsScalar, String> {
+    // Remove 0x prefix if present
+    let hex_str = hex_str.trim_start_matches("0x");
+    
+    // Parse hex string to bytes
+    let bytes = hex::decode(hex_str)
+        .map_err(|e| format!("Invalid hex string: {:?}", e))?;
+    
+    if bytes.len() != 32 {
+        return Err(format!("Hex string must be 32 bytes, got {}", bytes.len()));
+    }
+    
+    let mut byte_array = [0u8; 32];
+    byte_array.copy_from_slice(&bytes);
+    
+    Ok(BlsScalar::from_bytes(BytesN::from_array(env, &byte_array)))
 }
 
-fn generate_label(scope: &[u8], nonce: &[u8; 32]) -> Fr {
+fn generate_label(env: &Env, scope: &[u8], nonce: &[u8; 32]) -> BlsScalar {
     // Convert scope and nonce to field elements for Poseidon hashing
-    let scope_fr = Fr::from_le_bytes_mod_order(scope);
-    let nonce_fr = Fr::from_le_bytes_mod_order(nonce);
+    let scope_fr = BlsScalar::from_bytes(BytesN::from_array(env, &{
+        let mut bytes = [0u8; 32];
+        let len = scope.len().min(32);
+        bytes[..len].copy_from_slice(&scope[..len]);
+        bytes
+    }));
+    let nonce_fr = BlsScalar::from_bytes(BytesN::from_array(env, nonce));
     
     // Hash using Poseidon
-    poseidon_hash(&[scope_fr, nonce_fr])
+    poseidon_hash(env, &[scope_fr, nonce_fr])
 }
 
-fn generate_commitment(value: Fr, label: Fr, nullifier: Fr, secret: Fr) -> Fr {
-    let precommitment = poseidon_hash(&[nullifier, secret]);
-    poseidon_hash(&[value, label, precommitment])
+fn generate_commitment(env: &Env, value: BlsScalar, label: BlsScalar, nullifier: BlsScalar, secret: BlsScalar) -> BlsScalar {
+    let precommitment = poseidon_hash(env, &[nullifier, secret]);
+    poseidon_hash(env, &[value, label, precommitment])
 }
 
-fn generate_coin(scope: &[u8]) -> GeneratedCoin {
-    let value = Fr::from(COIN_VALUE as u64);
-    let nullifier = random_fr();
-    let secret = random_fr();
+fn generate_coin(env: &Env, scope: &[u8]) -> GeneratedCoin {
+    let value = BlsScalar::from_u256(U256::from_u32(env, COIN_VALUE as u32));
+    let nullifier = random_fr(env);
+    let secret = random_fr(env);
     let nonce = thread_rng().gen::<[u8; 32]>();
-    let label = generate_label(scope, &nonce);
-    let commitment = generate_commitment(value, label, nullifier, secret);
+    let label = generate_label(env, scope, &nonce);
+    let commitment = generate_commitment(env, value.clone(), label.clone(), nullifier.clone(), secret.clone());
+
+    let value_hex = hex::encode(value.to_bytes().to_array());
+    let nullifier_hex = hex::encode(nullifier.to_bytes().to_array());
+    let secret_hex = hex::encode(secret.to_bytes().to_array());
+    let label_hex = hex::encode(label.to_bytes().to_array());
+    let commitment_hex = hex::encode(commitment.to_bytes().to_array());
 
     let coin_data = CoinData {
-        value: value.into_bigint().to_string(),
-        nullifier: nullifier.into_bigint().to_string(),
-        secret: secret.into_bigint().to_string(),
-        label: label.into_bigint().to_string(),
-        commitment: commitment.into_bigint().to_string(),
+        value: value_hex,
+        nullifier: nullifier_hex,
+        secret: secret_hex,
+        label: label_hex,
+        commitment: commitment_hex.clone(),
     };
 
     GeneratedCoin {
         coin: coin_data,
-        commitment_hex: format!("0x{}", hex::encode(to_bytesn32(&commitment))),
+        commitment_hex: format!("0x{}", commitment_hex),
     }
 }
 
-fn withdraw_coin(coin: &CoinData, state_file: &StateFile) -> Result<SnarkInput, String> {
-    let value = Fr::from_str(&coin.value).map_err(|e| format!("Invalid coin value: {:?}", e))?;
-    let nullifier = Fr::from_str(&coin.nullifier).map_err(|e| format!("Invalid coin nullifier: {:?}", e))?;
-    let secret = Fr::from_str(&coin.secret).map_err(|e| format!("Invalid coin secret: {:?}", e))?;
-    let label = Fr::from_str(&coin.label).map_err(|e| format!("Invalid coin label: {:?}", e))?;
+fn withdraw_coin(env: &Env, coin: &CoinData, state_file: &StateFile) -> Result<SnarkInput, String> {
+    // Parse hex string values to BlsScalar
+    let value = hex_string_to_bls_scalar(env, &coin.value)?;
+    let nullifier = hex_string_to_bls_scalar(env, &coin.nullifier)?;
+    let secret = hex_string_to_bls_scalar(env, &coin.secret)?;
+    let label = hex_string_to_bls_scalar(env, &coin.label)?;
 
     // Reconstruct the commitment to verify it matches
-    let commitment = generate_commitment(value, label, nullifier, secret);
+    let commitment = generate_commitment(env, value.clone(), label.clone(), nullifier.clone(), secret.clone());
     
     // Build merkle tree from state file using lean-imt
-    let env = Env::default();
-    let mut tree = LeanIMT::new(&env, TREE_DEPTH);
+    let mut tree = LeanIMT::new(env, TREE_DEPTH);
     let mut commitment_index = None;
     
     for (index, commitment_str) in state_file.commitments.iter().enumerate() {
-        let commitment_fr = Fr::from_str(commitment_str)
-            .map_err(|e| format!("Invalid commitment at index {}: {:?}", index, e))?;
+        let commitment_fr = hex_string_to_bls_scalar(env, commitment_str)
+            .map_err(|e| format!("Invalid commitment at index {}: {}", index, e))?;
         
-        // Convert Fr to bytes and insert into lean-imt
-        let commitment_bytes = lean_imt::bls_scalar_to_bytes(&env, commitment_fr);
+        // Convert BlsScalar to bytes and insert into lean-imt
+        let commitment_bytes = lean_imt::bls_scalar_to_bytes(commitment_fr.clone());
         tree.insert(commitment_bytes);
         
         // Check if this is the commitment we're withdrawing
@@ -155,24 +176,30 @@ fn withdraw_coin(coin: &CoinData, state_file: &StateFile) -> Result<SnarkInput, 
         .ok_or_else(|| "Failed to generate merkle proof".to_string())?;
     let (siblings_scalars, _depth) = proof;
     
-    // Convert siblings from BlsScalar to Fr and then to strings
-    let siblings: Vec<Fr> = siblings_scalars.iter()
-        .map(|s| *s)
+    // Convert siblings from BlsScalar to strings
+    let siblings: std::vec::Vec<BlsScalar> = siblings_scalars.iter()
+        .map(|s| s.clone())
         .collect();
 
     // Get the root from lean-imt
     let root_scalar = lean_imt::bytes_to_bls_scalar(&tree.get_root());
 
+    let label_hex = hex::encode(label.to_bytes().to_array());
+    let value_hex = hex::encode(value.to_bytes().to_array());
+    let nullifier_hex = hex::encode(nullifier.to_bytes().to_array());
+    let secret_hex = hex::encode(secret.to_bytes().to_array());
+    let state_root_hex = hex::encode(root_scalar.to_bytes().to_array());
+
     Ok(SnarkInput {
         withdrawn_value: COIN_VALUE.to_string(),
-        label: label.into_bigint().to_string(),
-        value: value.into_bigint().to_string(),
-        nullifier: nullifier.into_bigint().to_string(),
-        secret: secret.into_bigint().to_string(),
-        state_root: root_scalar.into_bigint().to_string(),
+        label: label_hex,
+        value: value_hex,
+        nullifier: nullifier_hex,
+        secret: secret_hex,
+        state_root: state_root_hex,
         state_index: commitment_index.to_string(),
         state_siblings: siblings.into_iter()
-            .map(|s| s.into_bigint().to_string())
+            .map(|s| hex::encode(s.to_bytes().to_array()))
             .collect(),
     })
 }
@@ -194,12 +221,15 @@ fn print_usage() {
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let args: std::vec::Vec<String> = std::env::args().collect();
     
     if args.len() < 2 {
         print_usage();
         return;
     }
+
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
 
     match args[1].as_str() {
         "generate" => {
@@ -210,9 +240,9 @@ fn main() {
             }
             
             let scope = args[2].as_bytes();
-            let output_file = args.get(3).cloned().unwrap_or_else(|| "coin.json".to_string());
+            let output_file = args.get(3).map(|s| s.clone()).unwrap_or_else(|| "coin.json".to_string());
             
-            let generated_coin = generate_coin(scope);
+            let generated_coin = generate_coin(&env, scope);
             
             // Save coin data
             let coin_json = serde_json::to_string_pretty(&generated_coin).unwrap();
@@ -237,7 +267,7 @@ fn main() {
             
             let coin_file = &args[2];
             let state_file = &args[3];
-            let output_file = args.get(4).cloned().unwrap_or_else(|| "withdrawal.json".to_string());
+            let output_file = args.get(4).map(|s| s.clone()).unwrap_or_else(|| "withdrawal.json".to_string());
             
             // Read existing coin
             let coin_content = std::fs::read_to_string(coin_file)
@@ -251,7 +281,7 @@ fn main() {
             let state_data: StateFile = serde_json::from_str(&state_content)
                 .expect(&format!("Failed to parse state file: {}", state_file));
             
-            match withdraw_coin(&existing_coin.coin, &state_data) {
+            match withdraw_coin(&env, &existing_coin.coin, &state_data) {
                 Ok(snark_input) => {
                     // Save withdrawal data
                     let withdrawal_json = serde_json::to_string_pretty(&snark_input).unwrap();

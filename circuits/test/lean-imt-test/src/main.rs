@@ -1,6 +1,16 @@
 use lean_imt::LeanIMT;
 use serde::{Deserialize, Serialize};
-use soroban_sdk::Env;
+use soroban_sdk::{Env, crypto::bls12_381::Fr as BlsScalar};
+use num_bigint::BigUint;
+
+/// Converts a BlsScalar to a decimal string representation
+fn bls_scalar_to_decimal(scalar: BlsScalar) -> String {
+    let bytes = scalar.to_bytes();
+    let mut bytes_array = [0u8; 32];
+    bytes.copy_into_slice(&mut bytes_array);
+    let biguint = BigUint::from_bytes_be(&bytes_array);
+    biguint.to_string()
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(non_snake_case)]
@@ -30,6 +40,7 @@ fn main() {
         println!("");
         
         let env = Env::default();
+        env.cost_estimate().budget().reset_unlimited();
         let proof_result = compute_merkle_proof(&env, &leaves, leaf_index);
         
         println!("Leaf index: {}", proof_result.leafIndex);
@@ -96,7 +107,7 @@ fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerklePro
     
     // Get the leaf value using the new scalar-based method
     let leaf_scalar = tree.get_leaf_scalar(leaf_index as usize).expect("Leaf not found");
-    let leaf_value_decimal = leaf_scalar.to_string();
+    let leaf_value_decimal = bls_scalar_to_decimal(leaf_scalar);
     
     // Convert siblings to decimal strings - exactly `depth` items (no root included)
     let mut siblings_decimal = Vec::new();
@@ -110,15 +121,15 @@ fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerklePro
             };
             siblings_decimal.push(leaves[sibling_leaf_index].to_string());
         } else {
-            let sibling = siblings.get(i).expect("Missing sibling in proof for required depth");
-            let decimal_value = sibling.to_string();
+            let sibling = siblings.get(i as u32).expect("Missing sibling in proof for required depth");
+            let decimal_value = bls_scalar_to_decimal(sibling);
             siblings_decimal.push(decimal_value);
         }
     }
     
     // Get the merkle root for display
     let root_scalar = tree.get_root_scalar();
-    let root_decimal = root_scalar.to_string();
+    let root_decimal = bls_scalar_to_decimal(root_scalar);
     
     MerkleProofResult {
         leaf: leaf_value_decimal,

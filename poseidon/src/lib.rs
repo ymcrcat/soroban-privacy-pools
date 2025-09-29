@@ -1,66 +1,67 @@
 #![no_std]
 
-extern crate alloc;
-
-use ark_bls12_381::Fr as BlsScalar;
-use ark_ff::{Field, PrimeField};
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
+use soroban_sdk::{
+    crypto::bls12_381::Fr as BlsScalar,
+    vec, Vec, Env, BytesN, U256,
+};
 
 /// Poseidon255 implementation based on the Circom circuit
 /// This implements the same algorithm as poseidon255.circom
-pub struct Poseidon255 {
+pub struct Poseidon255<'a> {
+    env: &'a Env,
     round_constants: Vec<BlsScalar>, // Dynamic size based on t and rounds
     mds_matrix: Vec<Vec<BlsScalar>>, // Dynamic size based on t
 }
 
-impl Poseidon255 {
-    pub fn new() -> Self {
+impl<'a> Poseidon255<'a> {
+    pub fn new(env: &'a Env) -> Self {
         // Initialize with hardcoded constants from poseidon255_constants.circom
         // For t=2, we use 67 rounds × 2 width = 134 constants
-        let round_constants = Self::get_round_constants_t2();
-        let mds_matrix = Self::get_mds_matrix_t2();
+        let round_constants = Self::get_round_constants_t2(env);
+        let mds_matrix = Self::get_mds_matrix_t2(env);
         
         Self {
-            round_constants: round_constants.to_vec(),
-            mds_matrix: mds_matrix.iter().map(|row| row.to_vec()).collect(),
+            env,
+            round_constants,
+            mds_matrix,
         }
     }
     
-    pub fn new_with_t(t: usize) -> Self {
+    pub fn new_with_t(env: &'a Env, t: usize) -> Self {
         if t < 2 || t > 7 {
             panic!("Poseidon255 only supports t values from 2 to 7");
         }
         
-        let round_constants = Self::get_round_constants(t);
-        let mds_matrix = Self::get_mds_matrix(t);
+        let round_constants = Self::get_round_constants(env, t);
+        let mds_matrix = Self::get_mds_matrix(env, t);
         
         Self {
-            round_constants: round_constants.to_vec(),
-            mds_matrix: mds_matrix.iter().map(|row| row.to_vec()).collect(),
+            env,
+            round_constants,
+            mds_matrix,
         }
     }
     
     /// Get round constants for given t (from poseidon255_constants.circom)
-    fn get_round_constants(t: usize) -> Vec<BlsScalar> {
+    fn get_round_constants(env: &Env, t: usize) -> Vec<BlsScalar> {
         match t {
-            2 => Self::get_round_constants_t2().to_vec(),
-            3 => Self::get_round_constants_t3().to_vec(),
+            2 => Self::get_round_constants_t2(env),
+            3 => Self::get_round_constants_t3(env),
             _ => panic!("Constants for t={} not yet implemented", t)
         }
     }
     
     /// Get MDS matrix for given t (from poseidon255_constants.circom)
-    fn get_mds_matrix(t: usize) -> Vec<Vec<BlsScalar>> {
+    fn get_mds_matrix(env: &Env, t: usize) -> Vec<Vec<BlsScalar>> {
         match t {
-            2 => Self::get_mds_matrix_t2().iter().map(|row| row.to_vec()).collect(),
-            3 => Self::get_mds_matrix_t3().iter().map(|row| row.to_vec()).collect(),
+            2 => Self::get_mds_matrix_t2(env),
+            3 => Self::get_mds_matrix_t3(env),
             _ => panic!("MDS matrix for t={} not yet implemented", t)
         }
     }
     
     /// Get round constants for t=2 (from poseidon255_constants.circom)
-    fn get_round_constants_t2() -> [BlsScalar; 128] {
+    fn get_round_constants_t2(env: &Env) -> Vec<BlsScalar> {
         // Constants for t=2 from poseidon255_constants.circom
         // These are the actual cryptographic constants
         let hex_constants = [
@@ -194,20 +195,18 @@ impl Poseidon255 {
             "0x031597a49ea890a50ed8381799fa51e27e540902ada5f8d8a7529a980458eac8"
         ];
         
-        let mut constants = [BlsScalar::ZERO; 128];
+        let mut constants = vec![env];
         
         // Parse the actual hex constants
-        for (i, hex_str) in hex_constants.iter().enumerate() {
-            if i < 128 {
-                constants[i] = Self::parse_hex_to_scalar(hex_str);
-            }
+        for hex_str in hex_constants.iter() {
+            constants.push_back(Self::parse_hex_to_scalar(env, hex_str));
         }
         
         constants
     }
     
     /// Get MDS matrix for t=2 (from poseidon255_constants.circom)
-    fn get_mds_matrix_t2() -> [[BlsScalar; 2]; 2] {
+    fn get_mds_matrix_t2(env: &Env) -> Vec<Vec<BlsScalar>> {
         // MDS matrix for t=2 from poseidon255_constants.circom
         // These are the actual cryptographic constants
         let hex_matrix = [
@@ -221,18 +220,19 @@ impl Poseidon255 {
             ]
         ];
 
-        let mut matrix = [[BlsScalar::ZERO; 2]; 2];
-        for i in 0..2 {
-            for j in 0..2 {
-                matrix[i][j] = Self::parse_hex_to_scalar(hex_matrix[i][j]);
+        let mut matrix = vec![env];
+        for row in hex_matrix.iter() {
+            let mut matrix_row = vec![env];
+            for hex_str in row.iter() {
+                matrix_row.push_back(Self::parse_hex_to_scalar(env, hex_str));
             }
-
+            matrix.push_back(matrix_row);
         }
         matrix
     }
     
-        /// Get round constants for t=3 (from poseidon255_constants.circom)
-    fn get_round_constants_t3() -> [BlsScalar; 192] {
+    /// Get round constants for t=3 (from poseidon255_constants.circom)
+    fn get_round_constants_t3(env: &Env) -> Vec<BlsScalar> {
         // Constants for t=3 from poseidon255_constants.circom
         // These are the actual cryptographic constants for t=3
         let hex_constants = [
@@ -430,20 +430,18 @@ impl Poseidon255 {
             "0x13de705484874bb5e2abe4c518ce599eb64829e2d40e41bdd0c54ddeb26b86c0"
         ];
         
-        let mut constants = [BlsScalar::ZERO; 192];
+        let mut constants = vec![env];
         
         // Parse the actual hex constants
-        for (i, hex_str) in hex_constants.iter().enumerate() {
-            if i < 192 {
-                constants[i] = Self::parse_hex_to_scalar(hex_str);
-            }
+        for hex_str in hex_constants.iter() {
+            constants.push_back(Self::parse_hex_to_scalar(env, hex_str));
         }
         
         constants
     }
     
     /// Get MDS matrix for t=3 (from poseidon255_constants.circom)
-    fn get_mds_matrix_t3() -> [[BlsScalar; 3]; 3] {
+    fn get_mds_matrix_t3(env: &Env) -> Vec<Vec<BlsScalar>> {
         // MDS matrix for t=3 from poseidon255_constants.circom
         // These are the actual cryptographic constants for t=3
         let hex_matrix = [
@@ -464,11 +462,13 @@ impl Poseidon255 {
             ]
         ];
 
-        let mut matrix = [[BlsScalar::ZERO; 3]; 3];
-        for i in 0..3 {
-            for j in 0..3 {
-                matrix[i][j] = Self::parse_hex_to_scalar(hex_matrix[i][j]);
+        let mut matrix = vec![env];
+        for row in hex_matrix.iter() {
+            let mut matrix_row = vec![env];
+            for hex_str in row.iter() {
+                matrix_row.push_back(Self::parse_hex_to_scalar(env, hex_str));
             }
+            matrix.push_back(matrix_row);
         }
         matrix
     }
@@ -477,54 +477,59 @@ impl Poseidon255 {
     pub fn hash(&self, input: &BlsScalar) -> BlsScalar {
         // For t=2, we have 1 input + 1 capacity element
         // Initialize as [capacity, input] like Circom does
-        let mut state = [BlsScalar::ZERO, *input]; // [capacity, input]
+        let zero = BlsScalar::from_u256(U256::from_u32(self.env, 0));
+        let mut state = vec![self.env, zero, input.clone()]; // [capacity, input]
         
         // Apply all rounds with correct full/partial structure
         for round in 0..self.round_constants.len() / 2 {
             // Add round constant
             if round * 2 < self.round_constants.len() {
-                state[0] += self.round_constants[round * 2];
+                state.set(0, state.get(0).unwrap() + self.round_constants.get(round * 2).unwrap());
             }
             if round * 2 + 1 < self.round_constants.len() {
-                state[1] += self.round_constants[round * 2 + 1];
+                state.set(1, state.get(1).unwrap() + self.round_constants.get(round * 2 + 1).unwrap());
             }
             
             // Apply S-box based on round type
             if round < 4 || round >= 60 {
                 // Full rounds (0-3 and 60-63): Apply S-box to all elements
-                state[0] = state[0].pow([5]);
-                state[1] = state[1].pow([5]);
+                state.set(0, state.get(0).unwrap().pow(5));
+                state.set(1, state.get(1).unwrap().pow(5));
             } else {
                 // Partial rounds (4-59): Apply S-box only to first element
-                state[0] = state[0].pow([5]);
+                state.set(0, state.get(0).unwrap().pow(5));
                 // state[1] remains unchanged (no S-box)
             }
             
             // Apply MDS matrix
-            let new_state_0 = state[0] * self.mds_matrix[0][0] + state[1] * self.mds_matrix[0][1];
-            let new_state_1 = state[0] * self.mds_matrix[1][0] + state[1] * self.mds_matrix[1][1];
-            state = [new_state_0, new_state_1];
+            let new_state_0 = state.get(0).unwrap() * self.mds_matrix.get(0).unwrap().get(0).unwrap() + 
+                             state.get(1).unwrap() * self.mds_matrix.get(0).unwrap().get(1).unwrap();
+            let new_state_1 = state.get(0).unwrap() * self.mds_matrix.get(1).unwrap().get(0).unwrap() + 
+                             state.get(1).unwrap() * self.mds_matrix.get(1).unwrap().get(1).unwrap();
+            state.set(0, new_state_0);
+            state.set(1, new_state_1);
         }
         
         // Return the first element (as per Circom implementation)
-        state[0]
+        state.get(0).unwrap()
     }
 
     /// Hash two inputs using t=3 (2 inputs + 1 capacity)
     pub fn hash_two(&self, input1: &BlsScalar, input2: &BlsScalar) -> BlsScalar {
         // Create a new Poseidon instance with t=3 for two inputs
-        let poseidon_t3 = Poseidon255::new_with_t(3);
+        let poseidon_t3 = Poseidon255::new_with_t(self.env, 3);
         
         // For t=3, we have 2 inputs + 1 capacity element
         // Initialize state as [capacity, input1, input2]
-        let mut state = [BlsScalar::ZERO, *input1, *input2];
+        let zero = BlsScalar::from_u256(U256::from_u32(self.env, 0));
+        let mut state = vec![self.env, zero, input1.clone(), input2.clone()];
         
         // Apply all rounds with correct full/partial structure for t=3
         for round in 0..poseidon_t3.round_constants.len() / 3 {
             // Add round constants
             for i in 0..3 {
                 if round * 3 + i < poseidon_t3.round_constants.len() {
-                    state[i] += poseidon_t3.round_constants[round * 3 + i];
+                    state.set(i, state.get(i).unwrap() + poseidon_t3.round_constants.get(round * 3 + i).unwrap());
                 }
             }
             
@@ -532,62 +537,64 @@ impl Poseidon255 {
             if round < 4 || round >= 60 {
                 // Full rounds (0-3 and 60-63): Apply S-box to all elements
                 for i in 0..3 {
-                    state[i] = state[i].pow([5]);
+                    state.set(i, state.get(i).unwrap().pow(5));
                 }
             } else {
                 // Partial rounds (4-59): Apply S-box only to first element
-                state[0] = state[0].pow([5]);
+                state.set(0, state.get(0).unwrap().pow(5));
                 // state[1] and state[2] remain unchanged (no S-box)
             }
             
             // Apply MDS matrix
-            let mut new_state = [BlsScalar::ZERO; 3];
+            let mut new_state = vec![self.env];
             for i in 0..3 {
+                let mut sum = BlsScalar::from_u256(U256::from_u32(self.env, 0));
                 for j in 0..3 {
-                    new_state[i] += state[j] * poseidon_t3.mds_matrix[i][j];
+                    sum = sum + state.get(j).unwrap() * poseidon_t3.mds_matrix.get(i).unwrap().get(j).unwrap();
                 }
+                new_state.push_back(sum);
             }
             state = new_state;
         }
         
         // Return the first element (as per Circom implementation)
-        state[0]
+        state.get(0).unwrap()
     }
 
     /// Parse a hex string into a BlsScalar
     /// This can handle large hex values that exceed u64/u128 range
-    fn parse_hex_to_scalar(hex_str: &str) -> BlsScalar {
+    fn parse_hex_to_scalar(env: &Env, hex_str: &str) -> BlsScalar {
         // Remove 0x prefix if present
         let hex_str = hex_str.trim_start_matches("0x");
         
         // Convert hex string to bytes (big-endian first, then reverse for little-endian)
         let mut bytes = [0u8; 32];
         
-        // Pad hex string to 64 characters (32 bytes * 2 hex chars per byte)
-        let padded_hex = if hex_str.len() < 64 {
-            let mut padded = String::with_capacity(64);
-            for _ in 0..(64 - hex_str.len()) {
-                padded.push('0');
-            }
-            padded.push_str(hex_str);
-            padded
-        } else {
-            hex_str.to_string()
-        };
-        
         // Parse hex string in big-endian order
         for i in 0..32 {
             let start_idx = i * 2;
-            if start_idx + 1 < padded_hex.len() {
-                let hex_byte = &padded_hex[start_idx..start_idx + 2];
-                if let Ok(byte_val) = u8::from_str_radix(hex_byte, 16) {
-                    bytes[i] = byte_val;
+            if start_idx + 1 < hex_str.len() {
+                let hex_byte_str = &hex_str[start_idx..start_idx + 2];
+                // Convert hex byte to u8
+                let mut byte_val = 0u8;
+                for c in hex_byte_str.chars() {
+                    let digit = if c >= '0' && c <= '9' {
+                        c as u8 - '0' as u8
+                    } else if c >= 'a' && c <= 'f' {
+                        c as u8 - 'a' as u8 + 10
+                    } else if c >= 'A' && c <= 'F' {
+                        c as u8 - 'A' as u8 + 10
+                    } else {
+                        0
+                    };
+                    byte_val = byte_val * 16 + digit;
                 }
+                bytes[i as usize] = byte_val;
             }
         }
         
-        // Convert bytes to BlsScalar using from_be_bytes_mod_order for big-endian
-        BlsScalar::from_be_bytes_mod_order(&bytes)
+        // Convert bytes to BlsScalar using from_bytes
+        BlsScalar::from_bytes(BytesN::from_array(env, &bytes))
     }
 
 
@@ -596,32 +603,36 @@ impl Poseidon255 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_bls12_381::Fr as BlsScalar;
+    use soroban_sdk::Env;
     
     #[test]
     fn test_hash_two_basic() {
-        let poseidon = Poseidon255::new();
-        let input1 = BlsScalar::from(123u64);
-        let input2 = BlsScalar::from(456u64);
+        let env = Env::default();
+        let poseidon = Poseidon255::new(&env);
+        let input1 = BlsScalar::from_u256(U256::from_u32(&env, 123));
+        let input2 = BlsScalar::from_u256(U256::from_u32(&env, 456));
         
         let result = poseidon.hash_two(&input1, &input2);
         
         // Verify that the result is not zero and is different from inputs
-        assert_ne!(result, BlsScalar::ZERO);
+        let zero = BlsScalar::from_u256(U256::from_u32(&env, 0));
+        assert_ne!(result, zero);
         assert_ne!(result, input1);
         assert_ne!(result, input2);
         
         // Verify that the same inputs produce the same result
         let result2 = poseidon.hash_two(&input1, &input2);
+        // env.cost_estimate().budget().print();
         assert_eq!(result, result2);
     }
     
     #[test]
     fn test_hash_two_different_inputs() {
-        let poseidon = Poseidon255::new();
-        let input1 = BlsScalar::from(123u64);
-        let input2 = BlsScalar::from(456u64);
-        let input3 = BlsScalar::from(789u64);
+        let env = Env::default();
+        let poseidon = Poseidon255::new(&env);
+        let input1 = BlsScalar::from_u256(U256::from_u32(&env, 123));
+        let input2 = BlsScalar::from_u256(U256::from_u32(&env, 456));
+        let input3 = BlsScalar::from_u256(U256::from_u32(&env, 789));
         
         let result1 = poseidon.hash_two(&input1, &input2);
         let result2 = poseidon.hash_two(&input1, &input3);
@@ -632,13 +643,15 @@ mod tests {
     
     #[test]
     fn test_hash_two_t3_constants() {
-        let poseidon_t3 = Poseidon255::new_with_t(3);
-        let input1 = BlsScalar::from(123u64);
-        let input2 = BlsScalar::from(456u64);
+        let env = Env::default();
+        let poseidon_t3 = Poseidon255::new_with_t(&env, 3);
+        let input1 = BlsScalar::from_u256(U256::from_u32(&env, 123));
+        let input2 = BlsScalar::from_u256(U256::from_u32(&env, 456));
         
         let result = poseidon_t3.hash_two(&input1, &input2);
         
         // Verify that the result is not zero
-        assert_ne!(result, BlsScalar::ZERO);
+        let zero = BlsScalar::from_u256(U256::from_u32(&env, 0));
+        assert_ne!(result, zero);
     }
 }

@@ -141,6 +141,7 @@ fn init_erronous_pub_signals(env: &Env) -> Bytes {
 fn test_deposit_and_withdraw_correct_proof() {
     let env = Env::default();
     let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
+    env.cost_estimate().budget().print();
     
     // Create test addresses
     let alice = Address::generate(&env);
