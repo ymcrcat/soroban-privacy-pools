@@ -8,6 +8,7 @@ circuits/input
 circuits/test/node_modules
 circuits/*.wtns
 circuits/test/*.wtns
+circuits/test/*.wtns.json
 # Local settings
 .soroban
 .stellar
