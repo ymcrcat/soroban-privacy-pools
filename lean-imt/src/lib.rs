@@ -35,6 +35,10 @@ pub struct LeanIMT<'a> {
     depth: u32,
     root: BytesN<32>,
     poseidon: Poseidon255<'a>,
+    // Memoization cache for all computed subtrees
+    // Each level contains a map of node_index -> computed_hash
+    // Using a flat structure: level * max_nodes_per_level + node_index -> hash
+    subtree_cache: Vec<Option<BlsScalar>>,
 }
 
 impl<'a> LeanIMT<'a> {
@@ -46,7 +50,9 @@ impl<'a> LeanIMT<'a> {
             depth,
             root: BytesN::from_array(env, &[0u8; 32]),
             poseidon: Poseidon255::new_with_t(env, 3),
+            subtree_cache: vec![env],
         };
+        tree.initialize_cache();
         tree.recompute_tree();
         tree
     }
@@ -143,7 +149,19 @@ impl<'a> LeanIMT<'a> {
     }
 
     /// Computes the value of an internal node at a specific level in BlsScalar space
+    /// Now uses memoization cache for efficiency
     fn compute_node_at_level_scalar(&self, node_index: u32, target_level: u32) -> BlsScalar {
+        if target_level > self.depth {
+            return BlsScalar::from_u256(U256::from_u32(self.env, 0));
+        }
+        
+        // Check if we have this value cached
+        let cache_index = self.get_cache_index(target_level, node_index);
+        if let Some(cached_value) = self.subtree_cache.get(cache_index).unwrap() {
+            return cached_value;
+        }
+        
+        // If not cached, compute it
         if target_level == 0 {
             if node_index < self.leaves.len() as u32 {
                 let leaf_bytes = self.leaves.get(node_index).unwrap();
@@ -151,8 +169,6 @@ impl<'a> LeanIMT<'a> {
             } else {
                 BlsScalar::from_u256(U256::from_u32(self.env, 0))
             }
-        } else if target_level > self.depth {
-            BlsScalar::from_u256(U256::from_u32(self.env, 0))
         } else {
             // For levels > 0, compute by hashing the two children from the level below
             let left_child_index = node_index * 2;
@@ -172,16 +188,25 @@ impl<'a> LeanIMT<'a> {
     /// "all subtrees to the left of the newest member consist of subtrees 
     /// whose roots can be cached rather than recalculated"
     /// 
-    /// Instead of caching, we only recompute the specific path from the new leaf to root,
-    /// which is still O(log n) but much more efficient than full tree recomputation.
+    /// Now with full memoization - we only recompute the specific path from the new leaf to root,
+    /// and update the cache as we go.
     fn incremental_update(&mut self) {
         let leaf_index = (self.leaves.len() - 1) as u32;
-        self.root = self.recompute_path_to_root(leaf_index);
+        
+        // Update the leaf in the cache
+        let leaf_bytes = self.leaves.get(leaf_index).unwrap();
+        let leaf_scalar = bytes_to_bls_scalar(&leaf_bytes);
+        let cache_index = self.get_cache_index(0, leaf_index);
+        self.subtree_cache.set(cache_index, Some(leaf_scalar));
+        
+        // Recompute the path to root and update cache
+        self.root = self.recompute_path_to_root_with_cache_update(leaf_index);
     }
 
-    /// Recomputes only the path from a specific leaf to the root
-    /// This is the core of the "Clever shortcut 2" optimization
-    fn recompute_path_to_root(&self, leaf_index: u32) -> BytesN<32> {
+
+    /// Recomputes only the path from a specific leaf to the root with cache updates
+    /// This is the optimized version that updates the cache as it goes
+    fn recompute_path_to_root_with_cache_update(&mut self, leaf_index: u32) -> BytesN<32> {
         let leaf_bytes = self.leaves.get(leaf_index).unwrap();
         let leaf_scalar = bytes_to_bls_scalar(&leaf_bytes);
         
@@ -197,7 +222,7 @@ impl<'a> LeanIMT<'a> {
                 current_index - 1
             };
             
-            // Get the sibling value (either from existing leaves or compute if missing)
+            // Get the sibling value (either from cache or compute if missing)
             let sibling_scalar = if current_level == 0 {
                 // At leaf level, use actual leaves or zero if missing
                 if sibling_index < self.leaves.len() as u32 {
@@ -207,9 +232,13 @@ impl<'a> LeanIMT<'a> {
                     BlsScalar::from_u256(U256::from_u32(self.env, 0))
                 }
             } else {
-                // At internal levels, we need to compute the sibling's value
-                // This is where we could optimize further by caching sibling subtrees
-                self.compute_node_at_level_scalar(sibling_index, current_level)
+                // At internal levels, check cache first, then compute if needed
+                let sibling_cache_index = self.get_cache_index(current_level, sibling_index);
+                if let Some(cached_value) = self.subtree_cache.get(sibling_cache_index).unwrap() {
+                    cached_value
+                } else {
+                    self.compute_node_at_level_scalar(sibling_index, current_level)
+                }
             };
             
             // Compute the parent hash
@@ -219,9 +248,15 @@ impl<'a> LeanIMT<'a> {
                 self.hash_pair(sibling_scalar, current_scalar)
             };
             
+            // Cache the parent hash
+            let parent_index = current_index / 2;
+            let parent_level = current_level + 1;
+            let parent_cache_index = self.get_cache_index(parent_level, parent_index);
+            self.subtree_cache.set(parent_cache_index, Some(parent_scalar.clone()));
+            
             // Move up to the parent level
-            current_index = current_index / 2;
-            current_level += 1;
+            current_index = parent_index;
+            current_level = parent_level;
             current_scalar = parent_scalar;
         }
         
@@ -229,45 +264,85 @@ impl<'a> LeanIMT<'a> {
         bls_scalar_to_bytes(current_scalar)
     }
 
+    /// Initializes the subtree cache for all levels
+    fn initialize_cache(&mut self) {
+        // Calculate total cache size needed
+        let mut total_size = 0;
+        for level in 0..=self.depth {
+            let node_count = if level == 0 {
+                if self.depth == 0 { 1 } else { 1usize << (self.depth as usize) }
+            } else {
+                1usize << ((self.depth - level) as usize)
+            };
+            total_size += node_count;
+        }
+        
+        // Initialize flat cache with None values
+        self.subtree_cache = vec![self.env];
+        for _ in 0..total_size {
+            self.subtree_cache.push_back(None);
+        }
+    }
+
+    /// Gets the cache index for a given level and node index
+    fn get_cache_index(&self, level: u32, node_index: u32) -> u32 {
+        let mut index: u32 = 0;
+        for l in 0..level {
+            let node_count = if l == 0 {
+                if self.depth == 0 { 1 } else { 1usize << (self.depth as usize) }
+            } else {
+                1usize << ((self.depth - l) as usize)
+            };
+            index += node_count as u32;
+        }
+        index + node_index
+    }
+
     /// Recomputes the entire tree after insertion using fixed depth and zero padding
+    /// Now with full memoization - all subtrees are cached as they're computed
     fn recompute_tree(&mut self) {
         let target_leaf_count: usize = if self.depth == 0 { 1 } else { 1usize << (self.depth as usize) };
 
-        // Build leaf level with explicit leaves followed by zeros
-        let mut current_level_scalars = vec![self.env];
+        // Initialize level 0 cache with leaves and zeros
         for i in 0..target_leaf_count {
-            if i < (self.leaves.len() as usize) {
+            let leaf_scalar = if i < (self.leaves.len() as usize) {
                 let leaf_bytes = self.leaves.get(i as u32).unwrap();
-                let leaf_scalar = bytes_to_bls_scalar(&leaf_bytes);
-                current_level_scalars.push_back(leaf_scalar);
+                bytes_to_bls_scalar(&leaf_bytes)
             } else {
-                current_level_scalars.push_back(BlsScalar::from_u256(U256::from_u32(self.env, 0)));
-            }
+                BlsScalar::from_u256(U256::from_u32(self.env, 0))
+            };
+            let cache_index = self.get_cache_index(0, i as u32);
+            self.subtree_cache.set(cache_index, Some(leaf_scalar));
         }
         
-        // Compute up the tree for exactly self.depth levels
-        for _level in 0..self.depth {
-            let mut next_level_scalars = vec![self.env];
-            let mut i: usize = 0;
+        // Compute up the tree for exactly self.depth levels using memoization
+        for level in 1..=self.depth {
+            let parent_count = 1usize << ((self.depth - level) as usize);
             
-            while i < current_level_scalars.len() as usize {
-                if i + 1 < current_level_scalars.len() as usize {
-                    let hash_scalar = self.hash_pair(current_level_scalars.get(i as u32).unwrap(), current_level_scalars.get((i + 1) as u32).unwrap());
-                    next_level_scalars.push_back(hash_scalar);
-                } else {
-                    next_level_scalars.push_back(current_level_scalars.get(i as u32).unwrap());
-                }
-                i += 2;
+            for parent_index in 0..parent_count {
+                let left_child_index = parent_index * 2;
+                let right_child_index = left_child_index + 1;
+                
+                // Get cached values from the level below
+                let left_cache_index = self.get_cache_index(level - 1, left_child_index as u32);
+                let right_cache_index = self.get_cache_index(level - 1, right_child_index as u32);
+                let left_scalar = self.subtree_cache.get(left_cache_index).unwrap().unwrap();
+                let right_scalar = self.subtree_cache.get(right_cache_index).unwrap().unwrap();
+                
+                // Compute and cache the parent hash
+                let parent_hash = self.hash_pair(left_scalar, right_scalar);
+                let parent_cache_index = self.get_cache_index(level, parent_index as u32);
+                self.subtree_cache.set(parent_cache_index, Some(parent_hash));
             }
-            
-            current_level_scalars = next_level_scalars;
         }
 
-        // Final root (if depth == 0, it's the single leaf or zero)
-        if current_level_scalars.len() > 0 {
-            self.root = bls_scalar_to_bytes(current_level_scalars.get(0).unwrap());
+        // Set the root from the top level cache
+        if self.depth == 0 {
+            let root_cache_index = self.get_cache_index(0, 0);
+            self.root = bls_scalar_to_bytes(self.subtree_cache.get(root_cache_index).unwrap().unwrap());
         } else {
-            self.root = BytesN::from_array(self.env, &[0u8; 32]);
+            let root_cache_index = self.get_cache_index(self.depth, 0);
+            self.root = bls_scalar_to_bytes(self.subtree_cache.get(root_cache_index).unwrap().unwrap());
         }
     }
 
@@ -283,13 +358,16 @@ impl<'a> LeanIMT<'a> {
 
     /// Deserializes the tree state from storage
     pub fn from_storage(env: &'a Env, leaves: Vec<BytesN<32>>, depth: u32, root: BytesN<32>) -> Self {
-        Self {
+        let mut tree = Self {
             env,
             leaves,
             depth,
             root,
             poseidon: Poseidon255::new_with_t(env, 3),
-        }
+            subtree_cache: vec![env],
+        };
+        tree.initialize_cache();
+        tree
     }
 
     /// Gets all leaves in the tree
