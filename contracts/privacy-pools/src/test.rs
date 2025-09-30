@@ -311,3 +311,14 @@ fn test_reuse_nullifier() {
         ]
     );
 }
+
+#[cfg(feature = "test_hash")]
+#[test]
+fn test_hash_method() {
+    let env = Env::default();
+    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
+    let client = PrivacyPoolsContractClient::new(&env, &contract_id);
+    
+    // Should execute without panicking
+    client.test_hash();
+}

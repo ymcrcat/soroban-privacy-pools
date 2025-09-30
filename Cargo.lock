@@ -1080,6 +1080,7 @@ dependencies = [
  "hex",
  "lean-imt",
  "num-bigint",
+ "poseidon",
  "soroban-sdk",
  "zk",
 ]

@@ -8,8 +8,13 @@ use soroban_sdk::{
     crypto::bls12_381::Fr as BlsScalar,
 };
 
+#[cfg(feature = "test_hash")]
+use soroban_sdk::U256;
+
 use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
 use lean_imt::{LeanIMT, TREE_ROOT_KEY, TREE_DEPTH_KEY, TREE_LEAVES_KEY};
+#[cfg(feature = "test_hash")]
+use poseidon::Poseidon255;
 use num_bigint::BigUint;
 
 #[cfg(test)]
@@ -275,5 +280,16 @@ impl PrivacyPoolsContract {
         let biguint = BigUint::from_bytes_be(bytes);
         let decimal_str = biguint.to_str_radix(10);
         String::from_str(env, &decimal_str)
+    }
+
+}
+
+#[cfg(feature = "test_hash")]
+#[contractimpl]
+impl PrivacyPoolsContract {
+    pub fn test_hash(env: &Env) ->  () {
+        let poseidon = Poseidon255::new_with_t(env, 3);
+        let zero = BlsScalar::from_u256(U256::from_u32(env, 0));
+        poseidon.hash_two(&zero, &zero);
     }
 }
