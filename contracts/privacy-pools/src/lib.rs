@@ -5,7 +5,7 @@ extern crate alloc;
 use soroban_sdk::{
     contract, contractimpl, 
     vec, Env, String, Vec, Address, symbol_short, Symbol, Bytes, BytesN,
-    crypto::bls12_381::Fr as BlsScalar,
+    crypto::bls12_381::Fr as BlsScalar, token,
 };
 
 #[cfg(feature = "test_hash")]
@@ -30,8 +30,8 @@ const TREE_DEPTH: u32 = 2;
 
 // Storage keys
 const NULL_KEY: Symbol = symbol_short!("null");
-const BALANCE_KEY: Symbol = symbol_short!("balance");
 const VK_KEY: Symbol = symbol_short!("vk");
+const TOKEN_KEY: Symbol = symbol_short!("token");
 
 const FIXED_AMOUNT: i128 = 1000000000; // 1 XLM in stroops
 
@@ -40,8 +40,9 @@ pub struct PrivacyPoolsContract;
 
 #[contractimpl]
 impl PrivacyPoolsContract {
-    pub fn __constructor(env: &Env, vk_bytes: Bytes) {
+    pub fn __constructor(env: &Env, vk_bytes: Bytes, token_address: Address) {
         env.storage().instance().set(&VK_KEY, &vk_bytes);
+        env.storage().instance().set(&TOKEN_KEY, &token_address);
         
         // Initialize empty merkle tree with fixed depth
         let tree = LeanIMT::new(env, TREE_DEPTH);
@@ -86,7 +87,7 @@ impl PrivacyPoolsContract {
 
     /// Deposits funds into the privacy pool and stores a commitment in the merkle tree.
     ///
-    /// This function allows a user to deposit a fixed amount (1 XLM) into the privacy pool
+    /// This function allows a user to deposit a fixed amount (1 XLM) of the configured token into the privacy pool
     /// while providing a cryptographic commitment that will be used for zero-knowledge proof
     /// verification during withdrawal.
     ///
@@ -105,29 +106,31 @@ impl PrivacyPoolsContract {
     ///
     /// * Requires authentication from the `from` address
     /// * The commitment is stored in a merkle tree for efficient inclusion proofs
-    /// * Each deposit adds exactly `FIXED_AMOUNT` (1 XLM) to the contract balance
+    /// * Transfers exactly `FIXED_AMOUNT` of the configured token from the depositor to the contract
     ///
     /// # Storage
     ///
     /// * Updates the merkle tree with the new commitment
-    /// * Increases the contract balance by `FIXED_AMOUNT`
+    /// * Transfers the asset from the depositor to the contract
     pub fn deposit(env: &Env, from: Address, commitment: BytesN<32>) -> u32 {
         from.require_auth();
         
+        // Get the stored token address
+        let token_address: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
+        
+        // Create token client and transfer from depositor to contract
+        let token_client = token::Client::new(env, &token_address);
+        token_client.transfer(&from, &env.current_contract_address(), &FIXED_AMOUNT);
+        
         // Store the commitment in the merkle tree
         let (_, leaf_index) = Self::store_commitment(env, commitment);
-
-        // Update contract balance
-        let current_balance = env.storage().instance().get(&BALANCE_KEY)
-            .unwrap_or(0);
-        env.storage().instance().set(&BALANCE_KEY, &(current_balance + FIXED_AMOUNT));
 
         leaf_index
     }
 
     /// Withdraws funds from the privacy pool using a zero-knowledge proof.
     ///
-    /// This function allows a user to withdraw a fixed amount (1 XLM) from the privacy pool
+    /// This function allows a user to withdraw a fixed amount (1 XLM) of the configured token from the privacy pool
     /// by providing a cryptographic proof that demonstrates ownership of a previously deposited
     /// commitment without revealing which specific commitment it corresponds to.
     ///
@@ -152,12 +155,12 @@ impl PrivacyPoolsContract {
     /// * Requires authentication from the `to` address
     /// * Verifies that the nullifier hasn't been used before (prevents double-spending)
     /// * Validates the zero-knowledge proof using Groth16 verification
-    /// * Each withdrawal deducts exactly `FIXED_AMOUNT` (1 XLM) from the contract balance
+    /// * Transfers exactly `FIXED_AMOUNT` of the configured token from the contract to the recipient
     ///
     /// # Storage
     ///
     /// * Adds the nullifier to the used nullifiers list to prevent reuse
-    /// * Decreases the contract balance by `FIXED_AMOUNT`
+    /// * Transfers the asset from the contract to the recipient
     ///
     /// # Privacy
     ///
@@ -170,10 +173,13 @@ impl PrivacyPoolsContract {
             pub_signals_bytes: Bytes) -> Vec<String> {
         to.require_auth();
 
+        // Get the stored token address
+        let token_address: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
+
         // Check contract balance before updating state
-        let current_balance = env.storage().instance().get(&BALANCE_KEY)
-            .unwrap_or(0);
-        if current_balance < FIXED_AMOUNT {
+        let token_client = token::Client::new(env, &token_address);
+        let contract_balance = token_client.balance(&env.current_contract_address());
+        if contract_balance < FIXED_AMOUNT {
             return vec![env, String::from_str(env, ERROR_INSUFFICIENT_BALANCE)]
         }
 
@@ -227,8 +233,8 @@ impl PrivacyPoolsContract {
         nullifiers.push_back(nullifier);
         env.storage().instance().set(&NULL_KEY, &nullifiers);
 
-        // Update contract balance
-        env.storage().instance().set(&BALANCE_KEY, &(current_balance - FIXED_AMOUNT));
+        // Transfer the asset from the contract to the recipient
+        token_client.transfer(&env.current_contract_address(), &to, &FIXED_AMOUNT);
 
         return vec![env, String::from_str(env, ERROR_WITHDRAW_SUCCESS)]
     }
@@ -263,9 +269,11 @@ impl PrivacyPoolsContract {
             .unwrap_or(vec![env])
     }
 
+    /// Gets the balance of the configured token held by the contract
     pub fn get_balance(env: &Env) -> i128 {
-        env.storage().instance().get(&BALANCE_KEY)
-            .unwrap_or(0)
+        let token_address: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
+        let token_client = token::Client::new(env, &token_address);
+        token_client.balance(&env.current_contract_address())
     }
 
     /// Helper function to convert BlsScalar to decimal string for logging

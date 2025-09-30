@@ -3,6 +3,7 @@ set -e
 echo "🚀 Starting Privacy Pool Demo..."
 
 NETWORK=testnet # testnet, local
+TOKEN_ADDRESS=CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC # XLM token address on testnet
 
 # Check prerequisites
 echo "🔍 Checking prerequisites..."
@@ -25,7 +26,7 @@ if [ -z "$VK_HEX" ]; then
 fi
 
 echo "🚀 Deploying contract to $NETWORK..."
-soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network $NETWORK -- --vk_bytes $VK_HEX || { echo "❌ Error: Failed to deploy contract"; exit 1; }
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network $NETWORK -- --vk_bytes $VK_HEX --token_address $TOKEN_ADDRESS || { echo "❌ Error: Failed to deploy contract"; exit 1; }
 # Save the contract ID for later use
 echo ""
 echo "📋 Please paste the contract ID from the deployment above:"

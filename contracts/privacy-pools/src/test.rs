@@ -6,9 +6,48 @@ use core::str::FromStr;
 use soroban_sdk::{
     vec, Address, Bytes, BytesN, Env, String,
     crypto::bls12_381::{G1Affine, G2Affine, G1_SERIALIZED_SIZE, G2_SERIALIZED_SIZE, Fr},
-    U256
+    U256, symbol_short
 };
 use soroban_sdk::testutils::Address as TestAddress;
+
+// Mock token contract for testing
+#[contract]
+pub struct MockToken;
+
+#[contractimpl]
+impl MockToken {
+    pub fn initialize(env: &Env, admin: Address, decimal: u32, name: String, symbol: String) {
+        env.storage().instance().set(&symbol_short!("admin"), &admin);
+        env.storage().instance().set(&symbol_short!("decimal"), &decimal);
+        env.storage().instance().set(&symbol_short!("name"), &name);
+        env.storage().instance().set(&symbol_short!("symbol"), &symbol);
+    }
+
+    pub fn mint(env: &Env, to: Address, amount: i128) {
+        let admin: Address = env.storage().instance().get(&symbol_short!("admin")).unwrap();
+        admin.require_auth();
+        
+        let current_balance = env.storage().instance().get(&to).unwrap_or(0);
+        env.storage().instance().set(&to, &(current_balance + amount));
+    }
+
+    pub fn balance(env: &Env, id: Address) -> i128 {
+        env.storage().instance().get(&id).unwrap_or(0)
+    }
+
+    pub fn transfer(env: &Env, from: Address, to: Address, amount: i128) {
+        from.require_auth();
+        
+        let from_balance = env.storage().instance().get(&from).unwrap_or(0);
+        if from_balance < amount {
+            panic!("insufficient balance");
+        }
+        
+        let to_balance = env.storage().instance().get(&to).unwrap_or(0);
+        env.storage().instance().set(&from, &(from_balance - amount));
+        env.storage().instance().set(&to, &(to_balance + amount));
+    }
+}
 
 fn g1_from_coords(env: &Env, x: &str, y: &str) -> G1Affine {
     let ark_g1 = ark_bls12_381::G1Affine::new(Fq::from_str(x).unwrap(), Fq::from_str(y).unwrap());
@@ -137,10 +176,30 @@ fn init_erronous_pub_signals(env: &Env) -> Bytes {
     return pub_signals.to_bytes(env);
 }
 
+fn setup_test_environment(env: &Env) -> (Address, Address, Address) {
+    // Deploy mock token
+    let token_admin = Address::generate(env);
+    let token_id = env.register(MockToken, ());
+    let token_client = MockTokenClient::new(env, &token_id);
+    
+    // Initialize token
+    token_client.initialize(
+        &token_admin,
+        &7u32,
+        &String::from_str(env, "Test Token"),
+        &String::from_str(env, "TEST")
+    );
+    
+    // Deploy privacy pools contract
+    let privacy_pools_id = env.register(PrivacyPoolsContract, (init_vk(env), token_id.clone()));
+    
+    (token_id, privacy_pools_id, token_admin)
+}
+
 #[test]
 fn test_deposit_and_withdraw_correct_proof() {
     let env = Env::default();
-    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
+    let (token_id, contract_id, _token_admin) = setup_test_environment(&env);
     env.cost_estimate().budget().print();
     
     // Create test addresses
@@ -148,9 +207,15 @@ fn test_deposit_and_withdraw_correct_proof() {
     let bob = Address::generate(&env);
     
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
+    let token_client = MockTokenClient::new(&env, &token_id);
+
+    // Mint tokens to alice
+    env.mock_all_auths();
+    token_client.mint(&alice, &1000000000);
 
     // Test initial balance
     assert_eq!(client.get_balance(), 0);
+    assert_eq!(token_client.balance(&alice), 1000000000);
 
     // Test deposit
     let commitment = BytesN::from_array(&env, &[
@@ -164,12 +229,14 @@ fn test_deposit_and_withdraw_correct_proof() {
     env.mock_all_auths();
     client.deposit(&alice, &commitment);
     
-    // Check balance after deposit
-    assert_eq!(client.get_balance(), FIXED_AMOUNT);
     // Check commitments
     let commitments = client.get_commitments();
     assert_eq!(commitments.len(), 1);
     assert_eq!(commitments.get(0).unwrap(), commitment);
+
+    // Check balances after deposit
+    assert_eq!(token_client.balance(&alice), 0); // Alice's balance should be 0
+    assert_eq!(token_client.balance(&contract_id), 1000000000); // Contract should have the tokens
 
     // Test withdraw
     let proof = init_proof(&env);
@@ -186,10 +253,9 @@ fn test_deposit_and_withdraw_correct_proof() {
         ]
     );
 
-    // env.cost_estimate().budget().print();
-
-    // Check balance after withdrawal
-    assert_eq!(client.get_balance(), 0);
+    // Check balances after withdrawal
+    assert_eq!(token_client.balance(&bob), 1000000000); // Bob should have the tokens
+    assert_eq!(token_client.balance(&contract_id), 0); // Contract should have 0 tokens
 
     // Check nullifiers
     let nullifiers = client.get_nullifiers();
@@ -200,16 +266,22 @@ fn test_deposit_and_withdraw_correct_proof() {
 #[test]
 fn test_deposit_and_withdraw_wrong_proof() {
     let env = Env::default();
-    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
+    let (token_id, contract_id, _token_admin) = setup_test_environment(&env);
     
     // Create test addresses
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
     
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
+    let token_client = MockTokenClient::new(&env, &token_id);
+
+    // Mint tokens to alice
+    env.mock_all_auths();
+    token_client.mint(&alice, &1000000000);
 
     // Test initial balance
     assert_eq!(client.get_balance(), 0);
+    assert_eq!(token_client.balance(&alice), 1000000000);
 
     // Test deposit
     let commitment = BytesN::from_array(&env, &[
@@ -223,14 +295,12 @@ fn test_deposit_and_withdraw_wrong_proof() {
     env.mock_all_auths();
     client.deposit(&alice, &commitment);
     
-    // Check balance after deposit
-    assert_eq!(client.get_balance(), FIXED_AMOUNT);
     // Check commitments
     let commitments = client.get_commitments();
     assert_eq!(commitments.len(), 1);
     assert_eq!(commitments.get(0).unwrap(), commitment);
 
-    // Test withdraw
+    // Test withdraw with wrong proof
     let proof = init_proof(&env);
     let pub_signals = init_erronous_pub_signals(&env);
     
@@ -242,23 +312,25 @@ fn test_deposit_and_withdraw_wrong_proof() {
             String::from_str(&env, ERROR_COIN_OWNERSHIP_PROOF)
         ]
     );
-    assert_eq!(client.get_balance(), FIXED_AMOUNT);
+    
+    // Check that balances are unchanged (withdrawal failed)
+    assert_eq!(token_client.balance(&bob), 0); // Bob should still have 0
+    assert_eq!(token_client.balance(&contract_id), 1000000000); // Contract should still have tokens
+    
     let nullifiers = client.get_nullifiers();
-    assert_eq!(nullifiers.len(), 0);
-
-
-    // env.cost_estimate().budget().print();
+    assert_eq!(nullifiers.len(), 0); // No nullifiers should be stored
 }
 
 #[test]
 fn test_withdraw_insufficient_balance() {
     let env = Env::default();
-    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
+    let (_token_id, contract_id, _token_admin) = setup_test_environment(&env);
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
 
     let bob = Address::generate(&env);
     let proof = init_proof(&env);
     let pub_signals = init_pub_signals(&env);
+    
     // Attempt to withdraw with zero balance
     env.mock_all_auths();
     let result = client.withdraw(&bob, &proof, &pub_signals);
@@ -277,11 +349,16 @@ fn test_withdraw_insufficient_balance() {
 #[test]
 fn test_reuse_nullifier() {
     let env = Env::default();
-    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
+    let (token_id, contract_id, _token_admin) = setup_test_environment(&env);
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
+    let token_client = MockTokenClient::new(&env, &token_id);
 
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
+
+    // Mint tokens to alice
+    env.mock_all_auths();
+    token_client.mint(&alice, &2000000000); // Mint enough for two deposits
 
     // First deposit
     let commitment1 = BytesN::from_array(&env, &[
@@ -296,12 +373,16 @@ fn test_reuse_nullifier() {
     // First withdraw
     let proof = init_proof(&env);
     let pub_signals = init_pub_signals(&env);
+    env.mock_all_auths();
     client.withdraw(&bob, &proof, &pub_signals);
 
     // Second deposit
     let commitment2 = BytesN::from_array(&env, &[6u8; 32]);
+    env.mock_all_auths();
     client.deposit(&alice, &commitment2);
+    
     // Attempt to reuse nullifier
+    env.mock_all_auths();
     let result = client.withdraw(&bob, &proof, &pub_signals);
     assert_eq!(
         result,
@@ -312,11 +393,36 @@ fn test_reuse_nullifier() {
     );
 }
 
+#[test]
+fn test_contract_initialization() {
+    let env = Env::default();
+    let token_address = Address::generate(&env);
+    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env), token_address.clone()));
+    let client = PrivacyPoolsContractClient::new(&env, &contract_id);
+    
+    // Test that contract initializes correctly
+    let merkle_root = client.get_merkle_root();
+    let merkle_depth = client.get_merkle_depth();
+    let commitment_count = client.get_commitment_count();
+    let commitments = client.get_commitments();
+    let nullifiers = client.get_nullifiers();
+    
+    // Verify initial state
+    assert_eq!(merkle_depth, 2);
+    assert_eq!(commitment_count, 0);
+    assert_eq!(commitments.len(), 0);
+    assert_eq!(nullifiers.len(), 0);
+    
+    // Merkle root should be initialized (not all zeros)
+    assert_ne!(merkle_root, BytesN::from_array(&env, &[0u8; 32]));
+}
+
 #[cfg(feature = "test_hash")]
 #[test]
 fn test_hash_method() {
     let env = Env::default();
-    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env),));
+    let token_address = Address::generate(&env);
+    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env), token_address));
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
     
     // Should execute without panicking
