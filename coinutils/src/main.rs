@@ -74,8 +74,6 @@ fn poseidon_hash(env: &Env, inputs: &[BlsScalar]) -> BlsScalar {
     }
 }
 
-
-
 fn decimal_string_to_bls_scalar(env: &Env, decimal_str: &str) -> Result<BlsScalar, String> {
     // For now, let's use a simpler approach that works with the existing system
     // We'll convert the decimal to a u128 first, then to BlsScalar
