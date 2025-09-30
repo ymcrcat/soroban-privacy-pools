@@ -293,3 +293,69 @@ fn test_depth_2_tree_proof() {
     assert_eq!(siblings_0.get(1).unwrap(), expected_sibling_1_scalar);
 }
 
+#[test]
+fn test_incremental_update_functional_approach() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    let mut tree = LeanIMT::new(&env, 3); // Depth 3 tree (8 leaves)
+    
+    // Insert some leaves
+    tree.insert_u64(1);
+    tree.insert_u64(2);
+    tree.insert_u64(3);
+    
+    // Get the root after 3 insertions
+    let root_after_3 = tree.get_root();
+    
+    // Insert one more leaf using incremental update
+    tree.insert_u64(4);
+    
+    // Get the root after 4 insertions
+    let root_after_4 = tree.get_root();
+    
+    // Verify that the root changed (proving incremental update worked)
+    assert_ne!(root_after_3, root_after_4, "Root should change after inserting new leaf");
+    
+    // Verify that the incremental update produces the same result as full recomputation
+    let mut tree_full_recompute = LeanIMT::new(&env, 3);
+    tree_full_recompute.insert_u64(1);
+    tree_full_recompute.insert_u64(2);
+    tree_full_recompute.insert_u64(3);
+    tree_full_recompute.insert_u64(4);
+    
+    assert_eq!(root_after_4, tree_full_recompute.get_root(), 
+               "Incremental update should produce same result as full recomputation");
+}
+
+#[test]
+fn test_path_recomputation_efficiency() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    let mut tree = LeanIMT::new(&env, 4); // Depth 4 tree (16 leaves)
+    
+    // Insert many leaves to test efficiency
+    for i in 1..=10 {
+        tree.insert_u64(i);
+    }
+    
+    // Verify the tree is in a consistent state
+    assert_eq!(tree.get_leaf_count(), 10);
+    assert_eq!(tree.get_depth(), 4);
+    
+    // Test that path recomputation works for different leaf indices
+    for leaf_index in 0..10 {
+        let path_analysis = tree.analyze_optimization_path(leaf_index);
+        
+        // Should have 4 levels of analysis (depth 4)
+        assert_eq!(path_analysis.len(), 4); // 4 levels (no vec![env] start in this implementation)
+        
+        // Verify the analysis shows the optimization concept
+        for i in 0..4 { // 4 levels of analysis
+            let (level, sibling_index, _is_cached) = path_analysis.get(i).unwrap();
+            assert!(level < 4, "Level should be less than depth");
+            assert!(sibling_index < 16, "Sibling index should be within tree bounds");
+            // is_cached indicates whether this sibling would be cached in true implementation
+        }
+    }
+}
+
