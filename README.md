@@ -339,7 +339,7 @@ This project is specifically designed to work with Soroban's BLS12-381 implement
 
 ```bash
 # Generate a key for the deployer
-soroban keys generate --global alice --network <NETWORK>
+soroban keys generate alice --network <NETWORK>
 
 # Fund the deployer address
 soroban keys fund alice --network <NETWORK>
@@ -393,7 +393,7 @@ make .circuits
 cargo build --release
 
 # Set up Soroban testnet account
-soroban keys generate --global demo_user --network testnet
+soroban keys generate demo_user --network testnet
 soroban keys fund demo_user --network testnet
 ```
 
@@ -413,7 +413,7 @@ cargo run --bin circom2soroban vk circuits/output/main_verification_key.json > v
 VK_HEX=$(cat vk_hex.txt | grep -o '[0-9a-f]*$')
 
 # Deploy the contract
-soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network testnet --instructions 10000000 --fee 50000000 -- --vk_bytes $VK_HEX
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network testnet -- --vk_bytes $VK_HEX
 
 # Save the contract ID for later use
 export CONTRACT_ID=<CONTRACT_ID_FROM_DEPLOYMENT>
@@ -447,7 +447,7 @@ Use the commitment from the generated coin to deposit:
 COMMITMENT_HEX=$(cat demo_coin.json | jq -r '.commitment_hex' | sed 's/^0x//')
 
 # Deposit the coin into the contract
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet --instructions 4000000 -- deposit --from demo_user --commitment $COMMITMENT_HEX
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- deposit --from demo_user --commitment $COMMITMENT_HEX
 ```
 
 ### Step 4: Check the Balance
@@ -456,10 +456,10 @@ Verify the deposit was successful by checking the contract state:
 
 ```bash
 # Check the contract balance
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_balance
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_balance
 
 # Check the list of commitments
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_commitments
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_commitments
 ```
 
 ### Step 5: Create State File and Withdrawal Proof
@@ -503,7 +503,7 @@ Use the proof to withdraw the coin:
 
 ```bash
 # Withdraw using the proof
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet --fee 1000000 --instructions 50000000 -- withdraw --to demo_user --proof_bytes $PROOF_HEX --pub_signals_bytes $PUBLIC_HEX
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- withdraw --to demo_user --proof_bytes $PROOF_HEX --pub_signals_bytes $PUBLIC_HEX
 
 echo "Successfully withdrew coin"
 ```
@@ -514,10 +514,10 @@ Check that the withdrawal was successful and the nullifier is recorded:
 
 ```bash
 # Check the list of used nullifiers
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_nullifiers
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_nullifiers
 
 # Check the updated contract balance
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_balance
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_balance
 
 # The nullifier should now appear in the list, indicating it has been spent
 ```
@@ -529,19 +529,21 @@ Here's a complete script that automates the entire demo:
 ```bash
 #!/bin/bash
 set -e
-
 echo "🚀 Starting Privacy Pool Demo..."
+
+NETWORK=testnet # testnet, local
 
 # Check prerequisites
 echo "🔍 Checking prerequisites..."
 command -v jq >/dev/null 2>&1 || { echo "❌ Error: jq is required but not installed. Please install jq first."; exit 1; }
 command -v soroban >/dev/null 2>&1 || { echo "❌ Error: soroban CLI is required but not installed."; exit 1; }
-
+# Fund demo_user account if needed
+echo "🏦 Ensuring demo_user account is funded..."
+soroban keys fund demo_user --network $NETWORK > /dev/null 2>&1 || echo "⚠️  demo_user may already be funded"
 # Step 1: Deploy contract
 echo "📦 Deploying contract..."
 cargo build --target wasm32v1-none --release -p privacy-pools || { echo "❌ Error: Failed to build contract"; exit 1; }
 soroban contract optimize --wasm target/wasm32v1-none/release/privacy_pools.wasm --wasm-out target/wasm32v1-none/release/privacy_pools.optimized.wasm || { echo "❌ Error: Failed to optimize WASM"; exit 1; }
-
 # Convert verification key to hex format and extract it
 echo "🔑 Converting verification key..."
 cargo run --bin circom2soroban vk circuits/output/main_verification_key.json > vk_hex.txt || { echo "❌ Error: Failed to convert verification key"; exit 1; }
@@ -551,9 +553,8 @@ if [ -z "$VK_HEX" ]; then
     exit 1
 fi
 
-echo "🚀 Deploying contract to testnet..."
-soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network testnet -- --vk_bytes $VK_HEX || { echo "❌ Error: Failed to deploy contract"; exit 1; }
-
+echo "🚀 Deploying contract to $NETWORK..."
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network $NETWORK -- --vk_bytes $VK_HEX || { echo "❌ Error: Failed to deploy contract"; exit 1; }
 # Save the contract ID for later use
 echo ""
 echo "📋 Please paste the contract ID from the deployment above:"
@@ -563,7 +564,6 @@ if [ -z "$CONTRACT_ID" ]; then
     exit 1
 fi
 echo "✅ Contract ID set to: $CONTRACT_ID"
-
 # Step 2: Generate coin
 echo "🪙 Generating coin..."
 cargo run --bin coinutils generate demo_pool demo_coin.json || { echo "❌ Error: Failed to generate coin"; exit 1; }
@@ -573,16 +573,13 @@ if [ -z "$COMMITMENT_HEX" ]; then
     exit 1
 fi
 echo "Generated coin with commitment: $COMMITMENT_HEX"
-
 # Step 3: Deposit
 echo "💰 Depositing coin..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- deposit --from demo_user --commitment $COMMITMENT_HEX || { echo "❌ Error: Failed to deposit coin"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- deposit --from demo_user --commitment $COMMITMENT_HEX || { echo "❌ Error: Failed to deposit coin"; exit 1; }
 echo "Deposit successful!"
-
 # Step 4: Check balance
 echo "📊 Checking balance..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_balance || { echo "❌ Error: Failed to get balance"; exit 1; }
-
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_balance || { echo "❌ Error: Failed to get balance"; exit 1; }
 # Step 5: Create state file and withdrawal proof
 echo "📋 Creating state file..."
 COMMITMENT=$(cat demo_coin.json | jq -r '.coin.commitment')
@@ -595,35 +592,28 @@ echo "{
 
 echo "🔐 Creating withdrawal proof..."
 cargo run --bin coinutils withdraw demo_coin.json demo_state.json withdrawal_input.json || { echo "❌ Error: Failed to create withdrawal input"; exit 1; }
-
 echo "📝 Generating witness and proof..."
 cd circuits
 node build/main_js/generate_witness.js build/main_js/main.wasm ../withdrawal_input.json witness.wtns || { echo "❌ Error: Failed to generate witness"; exit 1; }
 snarkjs groth16 prove output/main_final.zkey witness.wtns proof.json public.json || { echo "❌ Error: Failed to generate proof"; exit 1; }
 cd ..
-
 echo "🔄 Converting proof for Soroban..."
 cargo run --bin circom2soroban proof circuits/proof.json > proof_hex.txt || { echo "❌ Error: Failed to convert proof"; exit 1; }
 cargo run --bin circom2soroban public circuits/public.json > public_hex.txt || { echo "❌ Error: Failed to convert public signals"; exit 1; }
-
-PROOF_HEX=$(grep "Proof Hex encoding:" proof_hex.txt | sed 's/.*Proof Hex encoding://' | tr -d '[:space:]')
-PUBLIC_HEX=$(grep "Public signals Hex encoding:" public_hex.txt | sed 's/.*Public signals Hex encoding://' | tr -d '[:space:]')
-
+PROOF_HEX=$(sed -n '/^Proof Hex encoding:/{n;p;}' proof_hex.txt | tr -d '[:space:]' | sed -E 's/^0x//i')
+PUBLIC_HEX=$(cat public_hex.txt | grep -o '[0-9a-f]*$')
 if [ -z "$PROOF_HEX" ] || [ -z "$PUBLIC_HEX" ]; then
     echo "❌ Error: Failed to extract proof or public signals"
     exit 1
 fi
-
 # Step 6: Withdraw
 echo "💸 Withdrawing coin..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- withdraw --to demo_user --proof_bytes $PROOF_HEX --pub_signals_bytes $PUBLIC_HEX || { echo "❌ Error: Failed to withdraw coin"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- withdraw --to demo_user --proof_bytes "$PROOF_HEX" --pub_signals_bytes "$PUBLIC_HEX" || { echo "❌ Error: Failed to withdraw coin"; exit 1; }
 echo "Withdrawal successful!"
-
 # Step 7: Verify
 echo "✅ Verifying withdrawal..."
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_nullifiers || { echo "❌ Error: Failed to get nullifiers"; exit 1; }
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_balance || { echo "❌ Error: Failed to get final balance"; exit 1; }
-
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_nullifiers || { echo "❌ Error: Failed to get nullifiers"; exit 1; }
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_balance || { echo "❌ Error: Failed to get final balance"; exit 1; }
 echo "🎉 Demo completed successfully!"
 ```
 
