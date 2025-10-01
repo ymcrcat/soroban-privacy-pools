@@ -34,7 +34,7 @@ pub struct LeanIMT<'a> {
     leaves: Vec<BytesN<32>>,
     depth: u32,
     root: BytesN<32>,
-    poseidon: Poseidon255<'a>,
+    poseidon: Poseidon255,
 }
 
 impl<'a> LeanIMT<'a> {
@@ -45,7 +45,7 @@ impl<'a> LeanIMT<'a> {
             leaves: vec![env],
             depth,
             root: BytesN::from_array(env, &[0u8; 32]),
-            poseidon: Poseidon255::new_with_t(env, 3),
+            poseidon: Poseidon255::new(env, 3),
         };
         tree.recompute_tree();
         tree
@@ -273,7 +273,7 @@ impl<'a> LeanIMT<'a> {
 
     /// Hashes two BlsScalar values using Poseidon hash function
     fn hash_pair(&self, left: BlsScalar, right: BlsScalar) -> BlsScalar {
-        self.poseidon.hash_two(&left, &right)
+        self.poseidon.hash_two(self.env, &left, &right)
     }
 
     /// Serializes the tree state for storage
@@ -288,7 +288,7 @@ impl<'a> LeanIMT<'a> {
             leaves,
             depth,
             root,
-            poseidon: Poseidon255::new_with_t(env, 3),
+            poseidon: Poseidon255::new(env, 3),
         }
     }
 
