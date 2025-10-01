@@ -98,12 +98,12 @@ fn main() {
         _ => panic!("Expected string or number for 'in2' field"),
     };
     
-    let poseidon1 = Poseidon255::new(&env);
-    let output1 = poseidon1.hash(&input1_scalar);
+    let poseidon1 = Poseidon255::new(&env, 2);
+    let output1 = poseidon1.hash(&env, &input1_scalar);
     let decimal_output1 = bls_scalar_to_decimal(output1);
 
-    let poseidon2 = Poseidon255::new_with_t(&env, 3);
-    let output2 = poseidon2.hash_two(&input1_scalar, &input2_scalar);
+    let poseidon2 = Poseidon255::new(&env, 3);
+    let output2 = poseidon2.hash_two(&env, &input1_scalar, &input2_scalar);
     let decimal_output2 = bls_scalar_to_decimal(output2);
 
     println!("{}", decimal_output1);
