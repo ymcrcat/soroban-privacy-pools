@@ -4,11 +4,11 @@ A Rust implementation of a Lean Incremental Merkle Tree designed for use with So
 
 ## Overview
 
-The LeanIMT is a specialized merkle tree implementation that follows specific design principles for efficient incremental updates and compatibility with zero-knowledge proof circuits. It's designed to work seamlessly with the privacy pools contract and the circom circuit implementation.
+LeanIMT is a specialized merkle tree implementation that follows specific design principles for efficient incremental updates and compatibility with zero-knowledge proof circuits. It's designed to work seamlessly with the privacy pools contract and the circom circuit implementation.
 
 ## Design Principles
 
-The LeanIMT follows these key design principles:
+LeanIMT follows these key design principles:
 
 1. **Every node with two children is the hash of its left and right nodes**
 2. **Every node with one child has the same value as its child node**
@@ -96,9 +96,75 @@ let tree = LeanIMT::from_storage(env.clone(), leaves, depth, root);
 - `is_empty() -> bool`: Check if tree is empty
 - `get_leaf(index: usize) -> Option<&BytesN<32>>`: Get leaf at specific index
 
+## Performance Optimizations
+
+LeanIMT implements several key optimizations to achieve efficient incremental updates and minimal storage overhead:
+
+### Dynamic Programming for Empty Trees
+
+When building an empty tree (all leaves are zero), LeanIMT uses a dynamic programming optimization that reduces complexity from **O(2^depth)** to **O(depth)**:
+
+**Traditional approach**: O(2^depth) - computes every node individually
+- For depth 20: 2^20 = 1,048,576 hash operations
+
+**Optimized approach**: O(depth) - leverages identical subtrees  
+- For depth 20: only 20 hash operations
+
+**How it works:**
+1. **Identical Subtrees**: In an empty tree, all subtrees at the same level are identical (all zeros)
+2. **Level-by-Level Computation**: Instead of computing each node individually, we compute one hash per level
+3. **Hash Reuse**: `hash(level_n, level_n) = level_n+1` - each level's hash becomes the input for the next level
+4. **Caching**: The computed hash for each level is cached in `subtree_cache`
+
+**Example for depth 3:**
+```
+Level 0: hash(0, 0) = H0
+Level 1: hash(H0, H0) = H1  
+Level 2: hash(H1, H1) = H2
+Level 3: hash(H2, H2) = H3 (root)
+```
+
+### Sparse Storage Structure
+
+LeanIMT uses a hybrid caching system to minimize storage while maintaining fast access:
+
+#### 1. Subtree Cache (`subtree_cache`)
+- **Purpose**: Stores hashes for entire levels of empty subtrees
+- **Key**: `level` → **Value**: `hash` for that level
+- **Use Case**: Empty tree construction and level-based optimizations
+- **Storage**: Minimal - only one entry per level
+
+#### 2. Sparse Cache (`sparse_cache`) 
+- **Purpose**: Stores only the nodes that have been updated due to leaf insertions
+- **Key**: `(level, node_index)` → **Value**: `computed_hash` for that specific node
+- **Use Case**: Incremental updates after leaf insertions
+- **Storage**: Sparse - only stores nodes on the path from new leaf to root
+
+#### Cache Lookup Strategy
+The system uses a two-tier lookup approach:
+1. **Primary Check**: Look in sparse cache for specific node updates (most recent changes)
+2. **Fallback**: If not found, check subtree cache for level-based hashes (empty tree optimization)
+
+### Incremental Update Optimization
+
+When inserting a new leaf, LeanIMT implements "Clever Shortcut 2" from Tornado Cash:
+
+1. **Path-Only Recomputation**: Only recomputes the path from the new leaf to the root
+2. **Sibling Reuse**: Siblings to the left of the insertion path can be cached and reused
+3. **Cache Updates**: Updates the sparse cache as it recomputes the path
+4. **Minimal Work**: Avoids recomputing the entire tree structure
+
+**Example insertion path:**
+```
+New leaf at index 5 (binary: 101)
+Path: 5 → 2 → 1 → 0 (root)
+Only these 4 nodes need recomputation
+All other nodes remain cached and unchanged
+```
+
 ## Hash Function
 
-The LeanIMT uses **Poseidon2** as its hash function, which provides:
+LeanIMT uses **Poseidon2** as its hash function, which provides:
 
 - **Consistency**: Same hash function used in the contract and circuit
 - **Security**: Cryptographically secure hash function
