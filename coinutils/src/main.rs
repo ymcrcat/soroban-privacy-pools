@@ -27,6 +27,12 @@ struct SnarkInput {
     state_index: String,
     #[serde(rename = "stateSiblings")]
     state_siblings: std::vec::Vec<String>,
+    #[serde(rename = "associationRoot")]
+    association_root: String,
+    #[serde(rename = "labelIndex")]
+    label_index: String,
+    #[serde(rename = "labelSiblings")]
+    label_siblings: std::vec::Vec<String>,
 }
 
 #[derive(Serialize, serde::Deserialize)]
@@ -47,6 +53,13 @@ struct GeneratedCoin {
 #[derive(Serialize, Deserialize)]
 struct StateFile {
     commitments: std::vec::Vec<String>,
+    scope: String,
+    association_set: Option<std::vec::Vec<String>>, // Optional association set labels
+}
+
+#[derive(Serialize, Deserialize)]
+struct AssociationSetFile {
+    labels: std::vec::Vec<String>,
     scope: String,
 }
 
@@ -195,7 +208,7 @@ fn generate_coin(env: &Env, scope: &[u8]) -> GeneratedCoin {
     }
 }
 
-fn withdraw_coin(env: &Env, coin: &CoinData, state_file: &StateFile) -> Result<SnarkInput, String> {
+fn withdraw_coin(env: &Env, coin: &CoinData, state_file: &StateFile, association_set_file: Option<&AssociationSetFile>) -> Result<SnarkInput, String> {
     // Parse decimal string values to BlsScalar
     let value = decimal_string_to_bls_scalar(env, &coin.value)?;
     let nullifier = decimal_string_to_bls_scalar(env, &coin.nullifier)?;
@@ -241,6 +254,57 @@ fn withdraw_coin(env: &Env, coin: &CoinData, state_file: &StateFile) -> Result<S
     // Get the root from lean-imt
     let root_scalar = lean_imt::bytes_to_bls_scalar(&tree.get_root());
 
+    // Handle association set
+    let (association_root, label_index, label_siblings) = if let Some(association_set) = association_set_file {
+        // Build association set merkle tree (depth 2)
+        let mut association_tree = LeanIMT::new(env, 2); // depth 2 for association set
+        let mut label_index = None;
+        
+        for (index, label_str) in association_set.labels.iter().enumerate() {
+            let label_fr = decimal_string_to_bls_scalar(env, label_str)
+                .map_err(|e| format!("Invalid association label at index {}: {}", index, e))?;
+            
+            // Convert BlsScalar to bytes and insert into association tree
+            let label_bytes = lean_imt::bls_scalar_to_bytes(label_fr.clone());
+            association_tree.insert(label_bytes);
+            
+            // Check if this is the label we're using
+            if label_fr == label {
+                label_index = Some(index);
+            }
+        }
+        
+        // Verify the label exists in the association set
+        let label_index = label_index.ok_or_else(|| {
+            "The coin's label was not found in the association set".to_string()
+        })?;
+        
+        // Generate association set merkle proof
+        let association_proof = association_tree.generate_proof(label_index as u32)
+            .ok_or_else(|| "Failed to generate association set merkle proof".to_string())?;
+        let (association_siblings_scalars, _depth) = association_proof;
+        
+        let association_root_scalar = lean_imt::bytes_to_bls_scalar(&association_tree.get_root());
+        let association_siblings: std::vec::Vec<BlsScalar> = association_siblings_scalars.iter()
+            .map(|s| s.clone())
+            .collect();
+        
+        (
+            bls_scalar_to_decimal_string(&association_root_scalar),
+            label_index.to_string(),
+            association_siblings.into_iter()
+                .map(|s| bls_scalar_to_decimal_string(&s))
+                .collect(),
+        )
+    } else {
+        // No association set - use dummy values
+        (
+            "0".to_string(),
+            "0".to_string(),
+            vec!["0".to_string(), "0".to_string()],
+        )
+    };
+
     let label_decimal = bls_scalar_to_decimal_string(&label);
     let value_decimal = bls_scalar_to_decimal_string(&value);
     let nullifier_decimal = bls_scalar_to_decimal_string(&nullifier);
@@ -258,21 +322,72 @@ fn withdraw_coin(env: &Env, coin: &CoinData, state_file: &StateFile) -> Result<S
         state_siblings: siblings.into_iter()
             .map(|s| bls_scalar_to_decimal_string(&s))
             .collect(),
+        association_root,
+        label_index,
+        label_siblings,
     })
+}
+
+fn update_association_set(_env: &Env, filename: &str, label: &str) -> Result<(), String> {
+    // Try to read existing association set file
+    let mut association_set = if std::path::Path::new(filename).exists() {
+        let content = std::fs::read_to_string(filename)
+            .map_err(|e| format!("Failed to read association set file: {}", e))?;
+        serde_json::from_str::<AssociationSetFile>(&content)
+            .map_err(|e| format!("Failed to parse association set file: {}", e))?
+    } else {
+        // Create new association set file
+        AssociationSetFile {
+            labels: std::vec::Vec::new(),
+            scope: "default_scope".to_string(),
+        }
+    };
+
+    // Check if label already exists
+    if !association_set.labels.contains(&label.to_string()) {
+        // Check if we're at the limit for depth 2 (4 labels max)
+        if association_set.labels.len() >= 4 {
+            return Err("Association set is full (maximum 4 labels for depth 2)".to_string());
+        }
+        
+        association_set.labels.push(label.to_string());
+        
+        // Save updated association set
+        let json = serde_json::to_string_pretty(&association_set)
+            .map_err(|e| format!("Failed to serialize association set: {}", e))?;
+        let mut file = File::create(filename)
+            .map_err(|e| format!("Failed to create association set file: {}", e))?;
+        file.write_all(json.as_bytes())
+            .map_err(|e| format!("Failed to write association set file: {}", e))?;
+        
+        println!("Added label '{}' to association set. Total labels: {}", label, association_set.labels.len());
+    } else {
+        println!("Label '{}' already exists in association set", label);
+    }
+
+    Ok(())
 }
 
 fn print_usage() {
     println!("Usage:");
     println!("  coinutils generate [scope] [output_file]  - Generate a new coin");
-    println!("  coinutils withdraw <coin_file> <state_file> [output_file]  - Withdraw a coin");
+    println!("  coinutils withdraw <coin_file> <state_file> [association_set_file] [output_file]  - Withdraw a coin");
+    println!("  coinutils updateAssociation <association_set_file> <label>  - Add label to association set");
     println!();
     println!("Examples:");
     println!("  coinutils generate my_pool_scope coin.json");
-    println!("  coinutils withdraw coin.json state.json withdrawal.json");
+    println!("  coinutils withdraw coin.json state.json association.json withdrawal.json");
+    println!("  coinutils updateAssociation association.json \"1234567890...\"");
     println!();
     println!("State file format:");
     println!("  {{");
     println!("    \"commitments\": [\"commitment1\", \"commitment2\", ...],");
+    println!("    \"scope\": \"pool_scope\"");
+    println!("  }}");
+    println!();
+    println!("Association set file format:");
+    println!("  {{");
+    println!("    \"labels\": [\"label1\", \"label2\", \"label3\", \"label4\"],");
     println!("    \"scope\": \"pool_scope\"");
     println!("  }}");
 }
@@ -317,14 +432,15 @@ fn main() {
         
         "withdraw" => {
             if args.len() < 4 {
-                println!("Error: withdraw command requires both coin file and state file");
+                println!("Error: withdraw command requires coin file, state file, and association set file");
                 print_usage();
                 return;
             }
             
             let coin_file = &args[2];
             let state_file = &args[3];
-            let output_file = args.get(4).map(|s| s.clone()).unwrap_or_else(|| "withdrawal.json".to_string());
+            let association_set_file = args.get(4);
+            let output_file = args.get(5).map(|s| s.clone()).unwrap_or_else(|| "withdrawal.json".to_string());
             
             // Read existing coin
             let coin_content = std::fs::read_to_string(coin_file)
@@ -338,7 +454,18 @@ fn main() {
             let state_data: StateFile = serde_json::from_str(&state_content)
                 .expect(&format!("Failed to parse state file: {}", state_file));
             
-            match withdraw_coin(&env, &existing_coin.coin, &state_data) {
+            // Read association set file if provided
+            let association_set_data = if let Some(assoc_file) = association_set_file {
+                let assoc_content = std::fs::read_to_string(assoc_file)
+                    .expect(&format!("Failed to read association set file: {}", assoc_file));
+                let assoc_data: AssociationSetFile = serde_json::from_str(&assoc_content)
+                    .expect(&format!("Failed to parse association set file: {}", assoc_file));
+                Some(assoc_data)
+            } else {
+                None
+            };
+            
+            match withdraw_coin(&env, &existing_coin.coin, &state_data, association_set_data.as_ref()) {
                 Ok(snark_input) => {
                     // Save withdrawal data
                     let withdrawal_json = serde_json::to_string_pretty(&snark_input).unwrap();
@@ -348,11 +475,33 @@ fn main() {
                     println!("Withdrawal created:");
                     println!("  Withdrawn value: {}", snark_input.withdrawn_value);
                     println!("  State root: {}", snark_input.state_root);
+                    println!("  Association root: {}", snark_input.association_root);
                     println!("  Commitment index: {}", snark_input.state_index);
                     println!("  Snark input saved to: {}", output_file);
                 }
                 Err(e) => {
                     println!("Error creating withdrawal: {}", e);
+                    return;
+                }
+            }
+        }
+        
+        "updateAssociation" => {
+            if args.len() < 4 {
+                println!("Error: updateAssociation command requires association set file and label");
+                print_usage();
+                return;
+            }
+            
+            let association_file = &args[2];
+            let label = &args[3];
+            
+            match update_association_set(&env, association_file, label) {
+                Ok(_) => {
+                    println!("Association set updated successfully");
+                }
+                Err(e) => {
+                    println!("Error updating association set: {}", e);
                     return;
                 }
             }

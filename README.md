@@ -12,6 +12,7 @@ A privacy-preserving transaction system built on Stellar using Soroban smart con
 - **Zero-knowledge proofs**: Uses Groth16 zkSNARKs with BLS12-381 curve for cryptographic verification
 - **Commitment scheme**: Cryptographic commitments using Poseidon hashing
 - **Merkle tree inclusion**: Efficient proof of commitment inclusion in the pool state
+- **Association sets**: Compliance feature allowing withdrawals only from approved subsets of deposits
 - **Soroban integration**: Native integration with Stellar's smart contract platform
 
 ## Project Structure
@@ -134,6 +135,7 @@ The Soroban contract (`contracts/privacy-pools/`) implements:
 - Deposit functionality with commitment generation
 - Withdrawal with zero-knowledge proof verification using BLS12-381
 - Nullifier tracking to prevent double-spending
+- Association set management for compliance verification
 - Integration with Soroban's native BLS12-381 curve operations
 
 ### Proof Generation and Conversion
@@ -166,15 +168,19 @@ The `coinutils` utility helps generate and manage privacy pool coins with proper
 # Generate a new coin for a privacy pool
 cargo run --bin coinutils generate <scope> [output_file]
 
-# Create withdrawal inputs from an existing coin (requires state file)
-cargo run --bin coinutils withdraw <coin_file> <state_file> [output_file]
+# Create withdrawal inputs from an existing coin (requires state file and association set file)
+cargo run --bin coinutils withdraw <coin_file> <state_file> <association_set_file> [output_file]
+
+# Add a label to an association set
+cargo run --bin coinutils updateAssociation <association_set_file> <label>
 ```
 
 **Features:**
 - **Coin Generation**: Creates new coins with random nullifiers and secrets
 - **Commitment Calculation**: Implements the same commitment scheme as the circuits
 - **Merkle Tree Integration**: Uses lean-imt for consistent merkle tree operations
-- **Withdrawal Preparation**: Generates circuit inputs with merkle tree proofs
+- **Association Set Management**: Creates and manages association sets for compliance
+- **Withdrawal Preparation**: Generates circuit inputs with merkle tree and association set proofs
 - **BLS12-381 Field Operations**: Uses arkworks for proper field arithmetic
 - **Poseidon Hashing**: Matches the circuit's hash implementation
 
@@ -186,8 +192,12 @@ cargo run --bin coinutils generate my_pool coin.json
 # Create state file with commitments
 echo '{"commitments": ["commitment1", "commitment2", "..."], "scope": "my_pool"}' > state.json
 
-# Create withdrawal from existing coin with state file
-cargo run --bin coinutils withdraw coin.json state.json withdrawal.json
+# Create association set with coin's label
+LABEL=$(cat coin.json | jq -r '.coin.label')
+cargo run --bin coinutils updateAssociation association.json "$LABEL"
+
+# Create withdrawal from existing coin with state file and association set
+cargo run --bin coinutils withdraw coin.json state.json association.json withdrawal.json
 ```
 
 **Generated Coin Structure:**
@@ -216,6 +226,19 @@ cargo run --bin coinutils withdraw coin.json state.json withdrawal.json
 }
 ```
 
+**Association Set File Structure:**
+```json
+{
+  "labels": [
+    "label1_hash",
+    "label2_hash",
+    "label3_hash",
+    "label4_hash"
+  ],
+  "scope": "pool_scope"
+}
+```
+
 **Withdrawal Input Structure:**
 ```json
 {
@@ -231,6 +254,12 @@ cargo run --bin coinutils withdraw coin.json state.json withdrawal.json
     "sibling2_hash",
     "0", "0", "0", "0", "0", "0", "0", "0",
     "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"
+  ],
+  "associationRoot": "association_merkle_root_hash",
+  "labelIndex": "0",
+  "labelSiblings": [
+    "label_sibling1_hash",
+    "label_sibling2_hash"
   ]
 }
 ```
@@ -290,21 +319,25 @@ echo "{
   \"scope\": \"test_pool_scope\"
 }" > state.json
 
-# 3. Create withdrawal input from the coin with state file
-cargo run --bin coinutils withdraw test_coin.json state.json withdrawal_input.json
+# 3. Create association set with the coin's label
+LABEL=$(cat test_coin.json | jq -r '.coin.label')
+cargo run --bin coinutils updateAssociation test_association.json "$LABEL"
 
-# 4. Generate witness and proof
+# 4. Create withdrawal input from the coin with state file and association set
+cargo run --bin coinutils withdraw test_coin.json state.json test_association.json withdrawal_input.json
+
+# 5. Generate witness and proof
 cd circuits
 node build/main_js/generate_witness.js build/main_js/main.wasm ../withdrawal_input.json witness.wtns
 snarkjs groth16 prove output/main_final.zkey witness.wtns proof.json public.json
 
-# 5. Convert for Soroban
+# 6. Convert for Soroban
 cd ..
 cargo run --bin circom2soroban vk circuits/output/main_verification_key.json
 cargo run --bin circom2soroban proof circuits/proof.json
 cargo run --bin circom2soroban public circuits/public.json
 
-# 6. Update test with new values and run
+# 7. Update test with new values and run
 cargo test test_coin_ownership
 ```
 
@@ -317,6 +350,45 @@ The project includes comprehensive tests:
 - **ZK verification tests**: Test proof verification in Soroban environment
 - **Integration tests**: End-to-end privacy pool functionality
 
+## Association Sets
+
+Association sets provide a compliance mechanism for privacy pools, allowing withdrawals only from approved subsets of deposits. This feature enables regulatory compliance while maintaining privacy.
+
+### How Association Sets Work
+
+1. **Label Generation**: Each coin has a unique label derived from its scope and nonce
+2. **Association Tree**: Labels are organized in a Merkle tree (depth 2, max 4 labels)
+3. **Compliance Verification**: Withdrawals must prove the coin's label is in the approved association set
+4. **Backward Compatibility**: Contracts without association sets configured allow any withdrawal
+
+### Association Set Management
+
+```bash
+# Create or update an association set
+cargo run --bin coinutils updateAssociation <association_file> <label>
+
+# Check association set contents
+cat <association_file>
+
+# Withdraw with association set verification
+cargo run --bin coinutils withdraw <coin_file> <state_file> <association_file> <output_file>
+```
+
+### Contract Integration
+
+The contract provides methods to manage association sets:
+
+```bash
+# Set association root (admin only)
+soroban contract invoke --id <CONTRACT_ID> --source <ADMIN> --network <NETWORK> -- set_association_root --admin <ADMIN> --association_root <ROOT_HEX>
+
+# Check if association set is configured
+soroban contract invoke --id <CONTRACT_ID> --source <USER> --network <NETWORK> -- has_association_set
+
+# Get current association root
+soroban contract invoke --id <CONTRACT_ID> --source <USER> --network <NETWORK> -- get_association_root
+```
+
 ## Security Considerations
 
 - **Trusted Setup**: The project uses Groth16 which requires a trusted setup ceremony for BLS12-381
@@ -324,6 +396,7 @@ The project includes comprehensive tests:
 - **Circuit Auditing**: Circuits should be audited before production use
 - **Key Management**: Verification keys must be properly validated
 - **Nullifier Uniqueness**: Contract ensures nullifiers cannot be reused
+- **Association Set Security**: Association roots must be properly validated and managed
 
 ## BLS12-381 Integration
 
@@ -462,9 +535,9 @@ soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK 
 soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_commitments
 ```
 
-### Step 5: Create State File and Withdrawal Proof
+### Step 5: Create State File and Association Set
 
-First, create a state file with the commitment from the generated coin, then generate the withdrawal inputs and create a zero-knowledge proof:
+First, create a state file with the commitment from the generated coin, then create an association set with the coin's label:
 
 ```bash
 # Create state file with the coin's commitment
@@ -476,8 +549,12 @@ echo "{
   \"scope\": \"demo_pool\"
 }" > demo_state.json
 
-# Create withdrawal inputs from the coin with state file
-cargo run --bin coinutils withdraw demo_coin.json demo_state.json withdrawal_input.json
+# Create association set with the coin's label
+LABEL=$(cat demo_coin.json | jq -r '.coin.label')
+cargo run --bin coinutils updateAssociation demo_association.json "$LABEL"
+
+# Create withdrawal inputs from the coin with state file and association set
+cargo run --bin coinutils withdraw demo_coin.json demo_state.json demo_association.json withdrawal_input.json
 
 # Generate witness and proof using the main circuit
 cd circuits
@@ -493,8 +570,13 @@ cargo run --bin circom2soroban public circuits/public.json > public_hex.txt
 PROOF_HEX=$(sed -n '/^Proof Hex encoding:/{n;p;}' proof_hex.txt | tr -d '[:space:]' | sed -E 's/^0x//i')
 PUBLIC_HEX=$(cat public_hex.txt | grep -o '[0-9a-f]*$')
 
+# Extract association root from public signals and set it in the contract
+ASSOCIATION_ROOT_HEX=$(echo "$PUBLIC_HEX" | tail -c 65) # Last 64 hex chars (32 bytes) for association root
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- set_association_root --admin demo_user --association_root $ASSOCIATION_ROOT_HEX
+
 echo "Generated proof: $PROOF_HEX"
 echo "Public signals: $PUBLIC_HEX"
+echo "Association root set: $ASSOCIATION_ROOT_HEX"
 ```
 
 ### Step 6: Withdraw from the Contract
@@ -537,7 +619,13 @@ Generated coin with commitment: abcd1234...
 Deposit successful!
 📊 Checking balance...
 1000000000
+📋 Creating state file...
+🏷️  Creating association set...
+Added label 'xyz789...' to association set. Total labels: 1
 🔐 Creating withdrawal proof...
+📝 Generating witness and proof...
+🔄 Converting proof for Soroban...
+🔗 Setting association root in contract...
 💸 Withdrawing coin...
 Withdrawal successful!
 ✅ Verifying withdrawal...

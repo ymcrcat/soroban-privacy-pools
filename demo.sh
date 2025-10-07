@@ -52,7 +52,7 @@ echo "Deposit successful!"
 # Step 4: Check balance
 echo "📊 Checking balance..."
 soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_balance || { echo "❌ Error: Failed to get balance"; exit 1; }
-# Step 5: Create state file and withdrawal proof
+# Step 5: Create state file and association set
 echo "📋 Creating state file..."
 COMMITMENT=$(cat demo_coin.json | jq -r '.coin.commitment')
 echo "{
@@ -62,8 +62,12 @@ echo "{
   \"scope\": \"demo_pool\"
 }" > demo_state.json
 
+echo "🏷️  Creating association set..."
+LABEL=$(cat demo_coin.json | jq -r '.coin.label')
+cargo run --bin coinutils updateAssociation demo_association.json "$LABEL" || { echo "❌ Error: Failed to create association set"; exit 1; }
+
 echo "🔐 Creating withdrawal proof..."
-cargo run --bin coinutils withdraw demo_coin.json demo_state.json withdrawal_input.json || { echo "❌ Error: Failed to create withdrawal input"; exit 1; }
+cargo run --bin coinutils withdraw demo_coin.json demo_state.json demo_association.json withdrawal_input.json || { echo "❌ Error: Failed to create withdrawal input"; exit 1; }
 echo "📝 Generating witness and proof..."
 cd circuits
 node build/main_js/generate_witness.js build/main_js/main.wasm ../withdrawal_input.json witness.wtns || { echo "❌ Error: Failed to generate witness"; exit 1; }
@@ -78,6 +82,11 @@ if [ -z "$PROOF_HEX" ] || [ -z "$PUBLIC_HEX" ]; then
     echo "❌ Error: Failed to extract proof or public signals"
     exit 1
 fi
+
+# Extract association root from public signals and set it in the contract
+echo "🔗 Setting association root in contract..."
+ASSOCIATION_ROOT_HEX=$(echo "$PUBLIC_HEX" | tail -c 65) # Last 64 hex chars (32 bytes) for association root
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- set_association_root --admin demo_user --association_root $ASSOCIATION_ROOT_HEX || { echo "❌ Error: Failed to set association root"; exit 1; }
 # Step 6: Withdraw
 echo "💸 Withdrawing coin..."
 soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- withdraw --to demo_user --proof_bytes "$PROOF_HEX" --pub_signals_bytes "$PUBLIC_HEX" || { echo "❌ Error: Failed to withdraw coin"; exit 1; }

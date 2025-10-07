@@ -32,6 +32,7 @@ const TREE_DEPTH: u32 = 2;
 const NULL_KEY: Symbol = symbol_short!("null");
 const VK_KEY: Symbol = symbol_short!("vk");
 const TOKEN_KEY: Symbol = symbol_short!("token");
+const ASSOCIATION_ROOT_KEY: Symbol = symbol_short!("assoc");
 
 const FIXED_AMOUNT: i128 = 1000000000; // 1 XLM in stroops
 
@@ -188,10 +189,28 @@ impl PrivacyPoolsContract {
         let proof = Proof::from_bytes(env, &proof_bytes);
         let pub_signals = PublicSignals::from_bytes(env, &pub_signals_bytes);
 
-        // Extract public signals: [nullifierHash, withdrawnValue, stateRoot]
+        // Extract public signals: [nullifierHash, withdrawnValue, stateRoot, associationRoot]
         let nullifier_hash = &pub_signals.pub_signals.get(0).unwrap();
         let _withdrawn_value = &pub_signals.pub_signals.get(1).unwrap();
         let proof_root = &pub_signals.pub_signals.get(2).unwrap();
+        let proof_association_root = &pub_signals.pub_signals.get(3).unwrap();
+
+        // Verify association set root if one is configured
+        if Self::has_association_set(env) {
+            let stored_association_root = Self::get_association_root(env);
+            let stored_association_scalar = lean_imt::bytes_to_bls_scalar(&stored_association_root);
+            let stored_association_str = Self::bls_scalar_to_decimal_string(env, &stored_association_scalar);
+            
+            let proof_association_u256 = proof_association_root.to_u256();
+            let proof_association_bytes = proof_association_u256.to_be_bytes();
+            let mut proof_association_array = [0u8; 32];
+            proof_association_bytes.copy_into_slice(&mut proof_association_array);
+            let proof_association_str = Self::bytes_to_decimal_string(env, &proof_association_array);
+            
+            if stored_association_str != proof_association_str {
+                return vec![env, String::from_str(env, "Association set root mismatch")]
+            }
+        }
 
         // Check if nullifier has been used before
         let mut nullifiers: Vec<BytesN<32>> = env.storage().instance().get(&NULL_KEY)
@@ -203,11 +222,11 @@ impl PrivacyPoolsContract {
             return vec![env, String::from_str(env, ERROR_NULLIFIER_USED)]
         }
         
+        // Verify state root matches
         let state_root: BytesN<32> = env.storage().instance().get(&TREE_ROOT_KEY)
             .unwrap_or(BytesN::from_array(&env, &[0u8; 32]));
         
         let state_root_scalar = lean_imt::bytes_to_bls_scalar(&state_root);
-        // Log both values for debugging
         let proof_root_u256 = proof_root.to_u256();
         let proof_root_bytes = proof_root_u256.to_be_bytes();
         let mut proof_root_array = [0u8; 32];
@@ -224,6 +243,7 @@ impl PrivacyPoolsContract {
              return vec![env, String::from_str(env, ERROR_COIN_OWNERSHIP_PROOF)]
         }
         
+        // Verify the zero-knowledge proof
         let res = Groth16Verifier::verify_proof(env, vk, proof, &pub_signals.pub_signals);
         if res.is_err() || !res.unwrap() {
             return vec![env, String::from_str(env, ERROR_COIN_OWNERSHIP_PROOF)]
@@ -274,6 +294,49 @@ impl PrivacyPoolsContract {
         let token_address: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
         let token_client = token::Client::new(env, &token_address);
         token_client.balance(&env.current_contract_address())
+    }
+
+    /// Sets the association set root for compliance verification
+    ///
+    /// This function allows authorized users to update the association set root,
+    /// which is used to verify that withdrawals are associated with approved
+    /// subsets of deposits for compliance purposes.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment
+    /// * `admin` - The address of the administrator (must be authenticated)
+    /// * `association_root` - The new association set root (32-byte hash)
+    ///
+    /// # Security
+    ///
+    /// * Requires authentication from the admin address
+    /// * Only authorized administrators should be able to update association sets
+    pub fn set_association_root(env: &Env, admin: Address, association_root: BytesN<32>) {
+        admin.require_auth();
+        
+        env.storage().instance().set(&ASSOCIATION_ROOT_KEY, &association_root);
+    }
+
+    /// Gets the current association set root
+    ///
+    /// # Returns
+    ///
+    /// * The current association set root, or zero bytes if not set
+    pub fn get_association_root(env: &Env) -> BytesN<32> {
+        env.storage().instance().get(&ASSOCIATION_ROOT_KEY)
+            .unwrap_or(BytesN::from_array(&env, &[0u8; 32]))
+    }
+
+    /// Checks if an association set is currently configured
+    ///
+    /// # Returns
+    ///
+    /// * `true` if an association set root is configured, `false` otherwise
+    pub fn has_association_set(env: &Env) -> bool {
+        let association_root = Self::get_association_root(env);
+        let zero_root = BytesN::from_array(&env, &[0u8; 32]);
+        association_root != zero_root
     }
 
     /// Helper function to convert BlsScalar to decimal string for logging
