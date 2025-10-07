@@ -1,6 +1,6 @@
 # Soroban Privacy Pools
 
-> **Warning**: This project is currently a work in progress and is under active development. It does not yet constitute a secure or functional system. Features and APIs may change.
+> **Warning**: This project is currently a work in progress and is a merely a prototype for educational purposed only. It does not yet constitute a secure or functional system. Features and APIs may change. No warranty provided.
 
 
 
