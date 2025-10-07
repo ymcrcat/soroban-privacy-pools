@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    symbol_short, vec, BytesN, Env, Symbol, Vec, U256,
+    symbol_short, vec, BytesN, Env, Symbol, Vec, U256, Map,
     crypto::bls12_381::Fr as BlsScalar,
 };
 use poseidon::Poseidon255;
@@ -35,10 +35,13 @@ pub struct LeanIMT<'a> {
     depth: u32,
     root: BytesN<32>,
     poseidon: Poseidon255<'a>,
-    // Memoization cache for all computed subtrees
-    // Each level contains a map of node_index -> computed_hash
-    // Using a flat structure: level * max_nodes_per_level + node_index -> hash
-    subtree_cache: Vec<Option<BlsScalar>>,
+    // Hybrid cache system:
+    // 1. subtree_cache: Dynamic programming cache for empty tree levels
+    //    Key: level -> Value: hash of subtrees at that level (all identical for empty trees)
+    // 2. sparse_cache: Sparse storage for nodes updated due to leaf insertions
+    //    Key: (level, node_index) -> Value: computed hash for specific nodes
+    subtree_cache: Map<u32, BlsScalar>,
+    sparse_cache: Map<(u32, u32), BlsScalar>,
 }
 
 impl<'a> LeanIMT<'a> {
@@ -50,9 +53,9 @@ impl<'a> LeanIMT<'a> {
             depth,
             root: BytesN::from_array(env, &[0u8; 32]),
             poseidon: Poseidon255::new_with_t(env, 3),
-            subtree_cache: vec![env],
+            subtree_cache: Map::new(env),
+            sparse_cache: Map::new(env),
         };
-        tree.initialize_cache();
         tree.recompute_tree();
         tree
     }
@@ -155,9 +158,8 @@ impl<'a> LeanIMT<'a> {
             return BlsScalar::from_u256(U256::from_u32(self.env, 0));
         }
         
-        // Check if we have this value cached
-        let cache_index = self.get_cache_index(target_level, node_index);
-        if let Some(cached_value) = self.subtree_cache.get(cache_index).unwrap() {
+        // Check if we have this node cached using hybrid cache system
+        if let Some(cached_value) = self.get_cached_node(target_level, node_index) {
             return cached_value;
         }
         
@@ -193,11 +195,10 @@ impl<'a> LeanIMT<'a> {
     fn incremental_update(&mut self) {
         let leaf_index = (self.leaves.len() - 1) as u32;
         
-        // Update the leaf in the cache
+        // Update the leaf in the sparse cache
         let leaf_bytes = self.leaves.get(leaf_index).unwrap();
         let leaf_scalar = bytes_to_bls_scalar(&leaf_bytes);
-        let cache_index = self.get_cache_index(0, leaf_index);
-        self.subtree_cache.set(cache_index, Some(leaf_scalar));
+        self.cache_sparse_node(0, leaf_index, leaf_scalar);
         
         // Recompute the path to root and update cache
         self.root = self.recompute_path_to_root_with_cache_update(leaf_index);
@@ -232,9 +233,8 @@ impl<'a> LeanIMT<'a> {
                     BlsScalar::from_u256(U256::from_u32(self.env, 0))
                 }
             } else {
-                // At internal levels, check cache first, then compute if needed
-                let sibling_cache_index = self.get_cache_index(current_level, sibling_index);
-                if let Some(cached_value) = self.subtree_cache.get(sibling_cache_index).unwrap() {
+                // At internal levels, use hybrid cache system
+                if let Some(cached_value) = self.get_cached_node(current_level, sibling_index) {
                     cached_value
                 } else {
                     self.compute_node_at_level_scalar(sibling_index, current_level)
@@ -248,14 +248,13 @@ impl<'a> LeanIMT<'a> {
                 self.hash_pair(sibling_scalar, current_scalar)
             };
             
-            // Cache the parent hash
+            // Cache the parent hash in sparse cache (specific node update)
             let parent_index = current_index / 2;
             let parent_level = current_level + 1;
-            let parent_cache_index = self.get_cache_index(parent_level, parent_index);
-            self.subtree_cache.set(parent_cache_index, Some(parent_scalar.clone()));
+            self.cache_sparse_node(parent_level, parent_index, parent_scalar.clone());
             
             // Move up to the parent level
-            current_index = parent_index;
+            current_index = current_index / 2;
             current_level = parent_level;
             current_scalar = parent_scalar;
         }
@@ -264,86 +263,79 @@ impl<'a> LeanIMT<'a> {
         bls_scalar_to_bytes(current_scalar)
     }
 
-    /// Initializes the subtree cache for all levels
-    fn initialize_cache(&mut self) {
-        // Calculate total cache size needed
-        let mut total_size = 0;
-        for level in 0..=self.depth {
-            let node_count = if level == 0 {
-                if self.depth == 0 { 1 } else { 1usize << (self.depth as usize) }
-            } else {
-                1usize << ((self.depth - level) as usize)
-            };
-            total_size += node_count;
-        }
-        
-        // Initialize flat cache with None values
-        self.subtree_cache = vec![self.env];
-        for _ in 0..total_size {
-            self.subtree_cache.push_back(None);
-        }
+    /// Gets a cached subtree hash for a level if it exists
+    fn get_cached_subtree_level(&self, level: u32) -> Option<BlsScalar> {
+        self.subtree_cache.get(level)
     }
 
-    /// Gets the cache index for a given level and node index
-    fn get_cache_index(&self, level: u32, node_index: u32) -> u32 {
-        let mut index: u32 = 0;
-        for l in 0..level {
-            let node_count = if l == 0 {
-                if self.depth == 0 { 1 } else { 1usize << (self.depth as usize) }
-            } else {
-                1usize << ((self.depth - l) as usize)
-            };
-            index += node_count as u32;
+    /// Caches a computed subtree hash for a level
+    fn cache_subtree_level(&mut self, level: u32, hash: BlsScalar) {
+        self.subtree_cache.set(level, hash);
+    }
+
+    /// Gets a cached node value using hybrid cache system:
+    /// 1. First check sparse_cache for specific node updates
+    /// 2. If not found, fall back to subtree_cache for level-based cache
+    fn get_cached_node(&self, level: u32, node_index: u32) -> Option<BlsScalar> {
+        // First check sparse cache for specific node updates
+        if let Some(cached_value) = self.sparse_cache.get((level, node_index)) {
+            return Some(cached_value);
         }
-        index + node_index
+        
+        // Fall back to subtree cache for level-based cache (empty tree optimization)
+        self.get_cached_subtree_level(level)
+    }
+
+    /// Caches a specific node in the sparse cache (for incremental updates)
+    fn cache_sparse_node(&mut self, level: u32, node_index: u32, hash: BlsScalar) {
+        self.sparse_cache.set((level, node_index), hash);
+    }
+
+    /// Rebuilds the cache from the current leaves
+    /// This is used when deserializing from storage
+    fn rebuild_cache_from_leaves(&mut self) {
+        if self.leaves.is_empty() {
+            // For empty trees, use the optimized empty tree construction
+            self.recompute_tree();
+            return;
+        }
+
+        // For trees with leaves, clear both caches and let them rebuild on-demand
+        // The hybrid cache system will handle the rest
+        self.subtree_cache = Map::new(self.env);
+        self.sparse_cache = Map::new(self.env);
     }
 
     /// Recomputes the entire tree after insertion using fixed depth and zero padding
-    /// Now with full memoization - all subtrees are cached as they're computed
+    /// Optimized for empty trees: O(depth) instead of O(2^depth) using dynamic programming
     fn recompute_tree(&mut self) {
-        let target_leaf_count: usize = if self.depth == 0 { 1 } else { 1usize << (self.depth as usize) };
-
-        // Initialize level 0 cache with leaves and zeros
-        for i in 0..target_leaf_count {
-            let leaf_scalar = if i < (self.leaves.len() as usize) {
-                let leaf_bytes = self.leaves.get(i as u32).unwrap();
-                bytes_to_bls_scalar(&leaf_bytes)
-            } else {
-                BlsScalar::from_u256(U256::from_u32(self.env, 0))
-            };
-            let cache_index = self.get_cache_index(0, i as u32);
-            self.subtree_cache.set(cache_index, Some(leaf_scalar));
-        }
-        
-        // Compute up the tree for exactly self.depth levels using memoization
-        for level in 1..=self.depth {
-            let parent_count = 1usize << ((self.depth - level) as usize);
-            
-            for parent_index in 0..parent_count {
-                let left_child_index = parent_index * 2;
-                let right_child_index = left_child_index + 1;
-                
-                // Get cached values from the level below
-                let left_cache_index = self.get_cache_index(level - 1, left_child_index as u32);
-                let right_cache_index = self.get_cache_index(level - 1, right_child_index as u32);
-                let left_scalar = self.subtree_cache.get(left_cache_index).unwrap().unwrap();
-                let right_scalar = self.subtree_cache.get(right_cache_index).unwrap().unwrap();
-                
-                // Compute and cache the parent hash
-                let parent_hash = self.hash_pair(left_scalar, right_scalar);
-                let parent_cache_index = self.get_cache_index(level, parent_index as u32);
-                self.subtree_cache.set(parent_cache_index, Some(parent_hash));
-            }
-        }
-
-        // Set the root from the top level cache
         if self.depth == 0 {
-            let root_cache_index = self.get_cache_index(0, 0);
-            self.root = bls_scalar_to_bytes(self.subtree_cache.get(root_cache_index).unwrap().unwrap());
-        } else {
-            let root_cache_index = self.get_cache_index(self.depth, 0);
-            self.root = bls_scalar_to_bytes(self.subtree_cache.get(root_cache_index).unwrap().unwrap());
+            // Special case: depth 0 tree with no leaves
+            self.root = BytesN::from_array(self.env, &[0u8; 32]);
+            return;
         }
+
+        // For empty trees, all subtrees at the same level are identical
+        // We only need to compute one hash per level: hash(level_n, level_n) = level_n+1
+        let zero_scalar = BlsScalar::from_u256(U256::from_u32(self.env, 0));
+        let mut current_level_hash = zero_scalar.clone();
+
+        // Compute hashes level by level, reusing the same hash for all nodes at each level
+        for level in 0..=self.depth {
+            if level == 0 {
+                // Level 0: all leaves are zero
+                current_level_hash = zero_scalar.clone();
+            } else {
+                // Level 1+: hash the previous level with itself
+                current_level_hash = self.hash_pair(current_level_hash.clone(), current_level_hash);
+            }
+
+            // Cache this hash for the level (all nodes at this level are identical)
+            self.cache_subtree_level(level, current_level_hash.clone());
+        }
+
+        // Set the root
+        self.root = bls_scalar_to_bytes(current_level_hash);
     }
 
     /// Hashes two BlsScalar values using Poseidon hash function
@@ -364,9 +356,12 @@ impl<'a> LeanIMT<'a> {
             depth,
             root,
             poseidon: Poseidon255::new_with_t(env, 3),
-            subtree_cache: vec![env],
+            subtree_cache: Map::new(env),
+            sparse_cache: Map::new(env),
         };
-        tree.initialize_cache();
+        
+        // Rebuild the cache for the deserialized tree
+        tree.rebuild_cache_from_leaves();
         tree
     }
 

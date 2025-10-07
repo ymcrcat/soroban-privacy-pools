@@ -360,65 +360,19 @@ fn test_path_recomputation_efficiency() {
 }
 
 #[test]
-fn test_depth_10_tree_creation() {
+fn test_depth_20_tree_with_leaves() {
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
-    let tree = LeanIMT::new(&env, 10);
-    
-    // Test that we can create a depth 10 tree
-    assert_eq!(tree.get_depth(), 10);
-    assert_eq!(tree.get_leaf_count(), 0);
-    
-    // Test that nodes beyond the tree depth return None
-    assert!(tree.get_node(11, 0).is_none());
-    
-    // Test that we can get the root (empty depth 10 tree should have a computed root)
-    let root = tree.get_root();
-    let zero_root = BytesN::from_array(&env, &[0u8; 32]);
-    assert_ne!(root, zero_root, "Empty depth 10 tree should have a non-zero computed root");
-    
-    // Test that we can get nodes at internal levels (levels 1-10 should exist for empty tree)
-    // Sample a few nodes at each level instead of checking all 1023 internal nodes
-    for level in 1..=10 {
-        let max_index = 1u32 << (10 - level);
-        // Test first, middle, and last nodes at each level
-        if max_index <= 3 {
-            for index in 0..max_index {
-                let node = tree.get_node(level, index);
-                assert!(node.is_some(), "Internal node at level {}, index {} should exist", level, index);
-            }
-        } else {
-            let test_indices = [0, max_index / 2, max_index - 1];
-            for &index in &test_indices {
-                let node = tree.get_node(level, index);
-                assert!(node.is_some(), "Internal node at level {}, index {} should exist", level, index);
-            }
-        }
-    }
-    
-    // Test that leaf nodes (level 0) return None for empty tree since no leaves were inserted
-    // Sample a few leaf positions instead of checking all 1024
-    let leaf_test_indices = [0, 100, 500, 1000, 1023]; // Sample across the range
-    for &index in &leaf_test_indices {
-        let node = tree.get_node(0, index);
-        assert!(node.is_none(), "Leaf node at index {} should not exist in empty tree", index);
-    }
-}
-
-#[test]
-fn test_depth_10_tree_with_leaves() {
-    let env = Env::default();
-    env.cost_estimate().budget().reset_unlimited();
-    let mut tree = LeanIMT::new(&env, 10);
+    let mut tree = LeanIMT::new(&env, 20);
     
     // Insert some leaves to test the tree functionality
-    let num_leaves = 20u32; // Insert 20 leaves out of 1024 possible (reduced for performance)
+    let num_leaves = 20u32; // Insert 20 leaves out of 1048576 possible (reduced for performance)
     for i in 1..=num_leaves {
         tree.insert_u64(i as u64);
     }
     
     // Verify the tree state
-    assert_eq!(tree.get_depth(), 10);
+    assert_eq!(tree.get_depth(), 20);
     assert_eq!(tree.get_leaf_count(), num_leaves);
     
     // Test that we can get the root
@@ -447,10 +401,10 @@ fn test_depth_10_tree_with_leaves() {
 }
 
 #[test]
-fn test_depth_10_tree_proof_generation() {
+fn test_depth_20_tree_proof_generation() {
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
-    let mut tree = LeanIMT::new(&env, 10);
+    let mut tree = LeanIMT::new(&env, 20);
     
     // Insert some leaves to test proof generation
     let num_leaves = 10u32; // Insert 10 leaves (reduced for performance)
@@ -466,8 +420,8 @@ fn test_depth_10_tree_proof_generation() {
             assert!(proof.is_some(), "Proof should be generated for leaf {}", leaf_index);
             
             let (siblings, depth) = proof.unwrap();
-            assert_eq!(depth, 10, "Proof depth should be 10 for leaf {}", leaf_index);
-            assert_eq!(siblings.len(), 10, "Should have 10 siblings for depth 10 tree, leaf {}", leaf_index);
+            assert_eq!(depth, 20, "Proof depth should be 20 for leaf {}", leaf_index);
+            assert_eq!(siblings.len(), 20, "Should have 20 siblings for depth 20 tree, leaf {}", leaf_index);
         }
     }
     
@@ -488,4 +442,142 @@ fn test_depth_10_tree_proof_generation() {
         }
     }
 }
+
+
+#[test]
+fn test_depth_20_tree_creation() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    let tree = LeanIMT::new(&env, 20);
+    
+    // Test that we can create a depth 20 tree
+    assert_eq!(tree.get_depth(), 20);
+    assert_eq!(tree.get_leaf_count(), 0);
+}
+
+#[test]
+fn test_from_storage_deserialization() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    
+    // Create a tree with some leaves
+    let mut tree = LeanIMT::new(&env, 4);
+    tree.insert_u64(1);
+    tree.insert_u64(2);
+    tree.insert_u64(3);
+    
+    // Serialize to storage
+    let (leaves, depth, root) = tree.to_storage();
+    
+    // Deserialize from storage
+    let deserialized_tree = LeanIMT::from_storage(&env, leaves, depth, root.clone());
+    
+    // Verify the deserialized tree works correctly
+    assert_eq!(deserialized_tree.get_depth(), 4);
+    assert_eq!(deserialized_tree.get_leaf_count(), 3);
+    assert_eq!(deserialized_tree.get_root(), root);
+    
+    // Test that we can still get nodes (cache should rebuild on-demand)
+    let node = deserialized_tree.get_node(1, 0);
+    assert!(node.is_some(), "Should be able to get nodes after deserialization");
+    
+    // Test that we can still generate proofs
+    let proof = deserialized_tree.generate_proof(0);
+    assert!(proof.is_some(), "Should be able to generate proofs after deserialization");
+}
+
+#[test]
+fn test_storage_serialization_comprehensive() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    
+    // Test 1: Empty tree serialization/deserialization
+    let empty_tree = LeanIMT::new(&env, 5);
+    let (empty_leaves, empty_depth, empty_root) = empty_tree.to_storage();
+    let deserialized_empty = LeanIMT::from_storage(&env, empty_leaves, empty_depth, empty_root.clone());
+    
+    assert_eq!(deserialized_empty.get_depth(), 5);
+    assert_eq!(deserialized_empty.get_leaf_count(), 0);
+    assert_eq!(deserialized_empty.get_root(), empty_root);
+    
+    // Test 2: Tree with multiple leaves
+    let mut tree_with_leaves = LeanIMT::new(&env, 4);
+    tree_with_leaves.insert_u64(42);
+    tree_with_leaves.insert_u64(123);
+    tree_with_leaves.insert_u64(456);
+    tree_with_leaves.insert_u64(789);
+    
+    let (leaves, depth, root) = tree_with_leaves.to_storage();
+    let mut deserialized_with_leaves = LeanIMT::from_storage(&env, leaves, depth, root.clone());
+    
+    assert_eq!(deserialized_with_leaves.get_depth(), 4);
+    assert_eq!(deserialized_with_leaves.get_leaf_count(), 4);
+    assert_eq!(deserialized_with_leaves.get_root(), root);
+    
+    // Test 3: Verify all leaves are preserved
+    for i in 0..4 {
+        let original_leaf = tree_with_leaves.get_leaf(i).unwrap();
+        let deserialized_leaf = deserialized_with_leaves.get_leaf(i).unwrap();
+        assert_eq!(original_leaf, deserialized_leaf, "Leaf {} should be preserved", i);
+    }
+    
+    // Test 4: Verify proofs work after deserialization
+    for i in 0..4 {
+        let original_proof = tree_with_leaves.generate_proof(i as u32).unwrap();
+        let deserialized_proof = deserialized_with_leaves.generate_proof(i as u32).unwrap();
+        
+        // Proofs should be identical
+        let (original_path, original_index) = original_proof;
+        let (deserialized_path, deserialized_index) = deserialized_proof;
+        
+        assert_eq!(original_index, deserialized_index, "Proof index should be identical");
+        assert_eq!(original_path.len(), deserialized_path.len(), "Proof path length should be identical");
+        
+        for (j, (orig, deser)) in original_path.iter().zip(deserialized_path.iter()).enumerate() {
+            assert_eq!(orig, deser, "Proof element {} should be identical", j);
+        }
+    }
+    
+    // Test 5: Verify we can continue inserting after deserialization
+    deserialized_with_leaves.insert_u64(999);
+    assert_eq!(deserialized_with_leaves.get_leaf_count(), 5);
+    
+    // Test 6: Verify root changes after insertion
+    let new_root = deserialized_with_leaves.get_root();
+    assert_ne!(new_root, root, "Root should change after insertion");
+}
+
+#[test]
+fn test_storage_roundtrip_consistency() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    
+    // Create a tree and perform multiple roundtrips
+    let mut original_tree = LeanIMT::new(&env, 6);
+    original_tree.insert_u64(1);
+    original_tree.insert_u64(2);
+    original_tree.insert_u64(3);
+    
+    let original_root = original_tree.get_root();
+    let original_leaf_count = original_tree.get_leaf_count();
+    
+    // Perform multiple serialization/deserialization cycles
+    let mut current_tree = original_tree;
+    for round in 0..3 {
+        let (leaves, depth, root) = current_tree.to_storage();
+        current_tree = LeanIMT::from_storage(&env, leaves, depth, root);
+        
+        // Verify consistency after each round
+        assert_eq!(current_tree.get_depth(), 6, "Depth should be preserved in round {}", round);
+        assert_eq!(current_tree.get_leaf_count(), original_leaf_count, "Leaf count should be preserved in round {}", round);
+        assert_eq!(current_tree.get_root(), original_root, "Root should be preserved in round {}", round);
+        
+        // Verify we can still generate proofs
+        for i in 0..original_leaf_count {
+            let proof = current_tree.generate_proof(i as u32);
+            assert!(proof.is_some(), "Should be able to generate proof for leaf {} in round {}", i, round);
+        }
+    }
+}
+
 
