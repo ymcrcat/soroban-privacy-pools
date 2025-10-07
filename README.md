@@ -23,11 +23,13 @@ A privacy-preserving transaction system built on Stellar using Soroban smart con
 │   ├── commitment.circom     # Commitment hashing logic
 │   ├── main.circom           # Main withdrawal verification circuit
 │   ├── merkleProof.circom    # Merkle tree inclusion proof
-│   ├── poseidon.circom       # Poseidon hash implementation
+│   ├── poseidon255.circom    # Poseidon255 hash implementation
+│   ├── poseidon255_constants.circom # Poseidon255 constants
 │   ├── dummy.circom          # Simplified circuit for testing
-│   ├── build/                # Compiled circuit artifacts
-│   ├── input/                # Test input files
-│   └── output/               # Generated keys and proofs
+│   └── test/                 # Test circuits and utilities
+│       ├── lean-imt-test/    # LeanIMT integration tests
+│       ├── poseidon-test/    # Poseidon hash tests
+│       └── test_*.circom     # Test circuit files
 ├── contracts/                # Soroban smart contracts
 │   └── privacy-pools/
 │       ├── src/
@@ -40,6 +42,17 @@ A privacy-preserving transaction system built on Stellar using Soroban smart con
 │   │   ├── lib.rs            # ZK proof verification logic
 │   │   └── test.rs           # ZK verification tests
 │   └── Cargo.toml
+├── lean-imt/                 # Lean Incremental Merkle Tree implementation
+│   ├── src/
+│   │   ├── lib.rs            # LeanIMT core implementation
+│   │   └── tests.rs          # LeanIMT tests
+│   ├── Cargo.toml
+│   └── README.md
+├── poseidon/                 # Poseidon hash implementation library
+│   ├── src/
+│   │   ├── lib.rs            # Poseidon hash functions
+│   │   └── test.rs           # Poseidon hash tests
+│   └── Cargo.toml
 ├── circom2soroban/           # Utility for converting circom artifacts
 │   ├── src/main.rs           # Converts VK/proofs/public to Soroban format
 │   └── Cargo.toml
@@ -48,6 +61,7 @@ A privacy-preserving transaction system built on Stellar using Soroban smart con
 │   └── Cargo.toml
 ├── Cargo.toml                # Workspace configuration
 ├── Makefile                  # Circuit compilation commands
+├── demo.sh                   # Complete demo script
 └── README.md
 ```
 
