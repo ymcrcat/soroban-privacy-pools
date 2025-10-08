@@ -26,7 +26,7 @@ if [ -z "$VK_HEX" ]; then
 fi
 
 echo "🚀 Deploying contract to $NETWORK..."
-soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network $NETWORK -- --vk_bytes $VK_HEX --token_address $TOKEN_ADDRESS || { echo "❌ Error: Failed to deploy contract"; exit 1; }
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network $NETWORK -- --vk_bytes $VK_HEX --token_address $TOKEN_ADDRESS --admin demo_user || { echo "❌ Error: Failed to deploy contract"; exit 1; }
 # Save the contract ID for later use
 echo ""
 echo "📋 Please paste the contract ID from the deployment above:"
@@ -36,6 +36,11 @@ if [ -z "$CONTRACT_ID" ]; then
     exit 1
 fi
 echo "✅ Contract ID set to: $CONTRACT_ID"
+
+# Check who the admin is
+echo "👤 Checking contract admin..."
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- get_admin || { echo "❌ Error: Failed to get admin"; exit 1; }
+
 # Step 2: Generate coin
 echo "🪙 Generating coin..."
 cargo run --bin coinutils generate demo_pool demo_coin.json || { echo "❌ Error: Failed to generate coin"; exit 1; }
@@ -86,7 +91,9 @@ fi
 # Extract association root from public signals and set it in the contract
 echo "🔗 Setting association root in contract..."
 ASSOCIATION_ROOT_HEX=$(echo "$PUBLIC_HEX" | tail -c 65) # Last 64 hex chars (32 bytes) for association root
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- set_association_root --admin demo_user --association_root $ASSOCIATION_ROOT_HEX || { echo "❌ Error: Failed to set association root"; exit 1; }
+# Note: Only the admin (contract deployer) can set association root
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- set_association_root --caller demo_user --association_root $ASSOCIATION_ROOT_HEX || { echo "❌ Error: Failed to set association root"; exit 1; }
+echo "✅ Association root set successfully"
 # Step 6: Withdraw
 echo "💸 Withdrawing coin..."
 soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- withdraw --to demo_user --proof_bytes "$PROOF_HEX" --pub_signals_bytes "$PUBLIC_HEX" || { echo "❌ Error: Failed to withdraw coin"; exit 1; }

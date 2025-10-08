@@ -364,6 +364,25 @@ The project includes comprehensive tests:
 - **ZK verification tests**: Test proof verification in Soroban environment
 - **Integration tests**: End-to-end privacy pool functionality
 
+## Admin Role
+
+The privacy pools contract implements an admin role system for secure management of association sets:
+
+- **Admin Assignment**: The contract deployer automatically becomes the admin
+- **Admin Privileges**: Only the admin can set association roots for compliance verification
+- **Admin Transparency**: Anyone can query the current admin address using `get_admin()`
+- **Security**: Admin functions require proper authentication and validation
+
+### Admin Functions
+
+```bash
+# Get the current admin address
+soroban contract invoke --id <CONTRACT_ID> --source <USER> --network <NETWORK> -- get_admin
+
+# Set association root (admin only)
+soroban contract invoke --id <CONTRACT_ID> --source <ADMIN> --network <NETWORK> -- set_association_root --caller <ADMIN> --association_root <ROOT_HEX>
+```
+
 ## Association Sets
 
 Association sets provide a compliance mechanism for privacy pools, allowing withdrawals only from approved subsets of deposits. This feature enables regulatory compliance while maintaining privacy.
@@ -394,13 +413,16 @@ The contract provides methods to manage association sets:
 
 ```bash
 # Set association root (admin only)
-soroban contract invoke --id <CONTRACT_ID> --source <ADMIN> --network <NETWORK> -- set_association_root --admin <ADMIN> --association_root <ROOT_HEX>
+soroban contract invoke --id <CONTRACT_ID> --source <ADMIN> --network <NETWORK> -- set_association_root --caller <ADMIN> --association_root <ROOT_HEX>
 
 # Check if association set is configured
 soroban contract invoke --id <CONTRACT_ID> --source <USER> --network <NETWORK> -- has_association_set
 
 # Get current association root
 soroban contract invoke --id <CONTRACT_ID> --source <USER> --network <NETWORK> -- get_association_root
+
+# Get the contract admin address
+soroban contract invoke --id <CONTRACT_ID> --source <USER> --network <NETWORK> -- get_admin
 ```
 
 ## Security Considerations
@@ -441,11 +463,14 @@ cargo build --target wasm32v1-none --release -p privacy-pools
 # Optimize the WASM for Soroban
 soroban contract optimize --wasm target/wasm32v1-none/release/privacy_pools.wasm --wasm-out target/wasm32v1-none/release/privacy_pools.optimized.wasm
 
-# Deploy the contract to the testnet passing a Hex-encoded verification key as an argument to the constructor
-soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source alice --network <NETWORK> -- --vk_bytes <VK_BYTES_HEX>
+# Deploy the contract to the testnet passing verification key, token address, and admin address to the constructor
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source alice --network <NETWORK> -- --vk_bytes <VK_BYTES_HEX> --token_address <TOKEN_ADDRESS> --admin <ADMIN_ADDRESS>
 ```
 
-**Note:** The constructor argument is passed as a Hex-encoding of a byte array, but without the `0x` prefix.
+**Note:** The constructor requires three parameters:
+- `vk_bytes`: Hex-encoded verification key (without `0x` prefix)
+- `token_address`: Address of the token contract to use for deposits/withdrawals
+- `admin`: Address of the contract administrator (typically the deployer)
 
 To deposit into the contract run
 
@@ -499,11 +524,14 @@ soroban contract optimize --wasm target/wasm32v1-none/release/privacy_pools.wasm
 cargo run --bin circom2soroban vk circuits/output/main_verification_key.json > vk_hex.txt
 VK_HEX=$(cat vk_hex.txt | grep -o '[0-9a-f]*$')
 
-# Deploy the contract
-soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network testnet -- --vk_bytes $VK_HEX
+# Deploy the contract (replace TOKEN_ADDRESS with actual token contract address)
+soroban contract deploy --wasm target/wasm32v1-none/release/privacy_pools.optimized.wasm --source demo_user --network testnet -- --vk_bytes $VK_HEX --token_address <TOKEN_ADDRESS> --admin demo_user
 
 # Save the contract ID for later use
 export CONTRACT_ID=<CONTRACT_ID_FROM_DEPLOYMENT>
+
+# Verify the admin was set correctly
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network testnet -- get_admin
 ```
 
 ### Step 2: Generate a Coin
@@ -586,7 +614,7 @@ PUBLIC_HEX=$(cat public_hex.txt | grep -o '[0-9a-f]*$')
 
 # Extract association root from public signals and set it in the contract
 ASSOCIATION_ROOT_HEX=$(echo "$PUBLIC_HEX" | tail -c 65) # Last 64 hex chars (32 bytes) for association root
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- set_association_root --admin demo_user --association_root $ASSOCIATION_ROOT_HEX
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- set_association_root --caller demo_user --association_root $ASSOCIATION_ROOT_HEX
 
 echo "Generated proof: $PROOF_HEX"
 echo "Public signals: $PUBLIC_HEX"

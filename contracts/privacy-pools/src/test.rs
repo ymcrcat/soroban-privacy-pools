@@ -198,15 +198,16 @@ fn setup_test_environment(env: &Env) -> (Address, Address, Address) {
     );
     
     // Deploy privacy pools contract
-    let privacy_pools_id = env.register(PrivacyPoolsContract, (init_vk(env), token_id.clone()));
+    let admin = Address::generate(env);
+    let privacy_pools_id = env.register(PrivacyPoolsContract, (init_vk(env), token_id.clone(), admin.clone()));
     
-    (token_id, privacy_pools_id, token_admin)
+    (token_id, privacy_pools_id, admin)
 }
 
 #[test]
 fn test_deposit_and_withdraw_correct_proof() {
     let env = Env::default();
-    let (token_id, contract_id, _token_admin) = setup_test_environment(&env);
+    let (token_id, contract_id, admin) = setup_test_environment(&env);
     env.cost_estimate().budget().print();
     
     // Create test addresses
@@ -253,7 +254,14 @@ fn test_deposit_and_withdraw_correct_proof() {
         0xbd, 0xe9, 0x00, 0x68, 0xb8, 0x2f, 0x74, 0xf6
     ]);
     env.mock_all_auths();
-    client.set_association_root(&alice, &association_root);
+    let set_result = client.set_association_root(&admin, &association_root);
+    assert_eq!(
+        set_result,
+        vec![
+            &env,
+            String::from_str(&env, SUCCESS_ASSOCIATION_ROOT_SET)
+        ]
+    );
 
     // Test withdraw
     let proof = init_proof(&env);
@@ -283,7 +291,7 @@ fn test_deposit_and_withdraw_correct_proof() {
 #[test]
 fn test_deposit_and_withdraw_wrong_proof() {
     let env = Env::default();
-    let (token_id, contract_id, _token_admin) = setup_test_environment(&env);
+    let (token_id, contract_id, _admin) = setup_test_environment(&env);
     
     // Create test addresses
     let alice = Address::generate(&env);
@@ -341,7 +349,7 @@ fn test_deposit_and_withdraw_wrong_proof() {
 #[test]
 fn test_withdraw_insufficient_balance() {
     let env = Env::default();
-    let (_token_id, contract_id, _token_admin) = setup_test_environment(&env);
+    let (_token_id, contract_id, _admin) = setup_test_environment(&env);
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
 
     let bob = Address::generate(&env);
@@ -366,7 +374,7 @@ fn test_withdraw_insufficient_balance() {
 #[test]
 fn test_reuse_nullifier() {
     let env = Env::default();
-    let (token_id, contract_id, _token_admin) = setup_test_environment(&env);
+    let (token_id, contract_id, _admin) = setup_test_environment(&env);
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
     let token_client = MockTokenClient::new(&env, &token_id);
 
@@ -413,8 +421,7 @@ fn test_reuse_nullifier() {
 #[test]
 fn test_contract_initialization() {
     let env = Env::default();
-    let token_address = Address::generate(&env);
-    let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env), token_address.clone()));
+    let (_token_id, contract_id, _admin) = setup_test_environment(&env);
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
     
     // Test that contract initializes correctly
@@ -437,7 +444,7 @@ fn test_contract_initialization() {
 #[test]
 fn test_withdraw_without_association_set() {
     let env = Env::default();
-    let (token_id, contract_id, _token_admin) = setup_test_environment(&env);
+    let (token_id, contract_id, _admin) = setup_test_environment(&env);
     
     // Create test addresses
     let alice = Address::generate(&env);
@@ -507,7 +514,7 @@ fn test_withdraw_without_association_set() {
 #[test]
 fn test_withdraw_association_root_mismatch() {
     let env = Env::default();
-    let (token_id, contract_id, _token_admin) = setup_test_environment(&env);
+    let (token_id, contract_id, admin) = setup_test_environment(&env);
     
     // Create test addresses
     let alice = Address::generate(&env);
@@ -553,7 +560,14 @@ fn test_withdraw_association_root_mismatch() {
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
     ]);
     env.mock_all_auths();
-    client.set_association_root(&alice, &incorrect_association_root);
+    let set_result = client.set_association_root(&admin, &incorrect_association_root);
+    assert_eq!(
+        set_result,
+        vec![
+            &env,
+            String::from_str(&env, SUCCESS_ASSOCIATION_ROOT_SET)
+        ]
+    );
 
     // Verify association set is configured
     assert_eq!(client.has_association_set(), true);
@@ -578,6 +592,47 @@ fn test_withdraw_association_root_mismatch() {
     // Check that no nullifier was stored when withdrawal failed
     let nullifiers = client.get_nullifiers();
     assert_eq!(nullifiers.len(), 0);
+}
+
+#[test]
+fn test_set_association_root_non_admin() {
+    let env = Env::default();
+    let (_token_id, contract_id, _admin) = setup_test_environment(&env);
+    let client = PrivacyPoolsContractClient::new(&env, &contract_id);
+    
+    // Create a non-admin user
+    let non_admin = Address::generate(&env);
+    
+    // Create a test association root
+    let association_root = BytesN::from_array(&env, &[
+        0x0c, 0x62, 0x9c, 0xe5, 0x84, 0xbe, 0xbb, 0xc0,
+        0xd7, 0x6e, 0x7a, 0x23, 0xbc, 0x66, 0x7c, 0x57,
+        0xc7, 0xe9, 0xf2, 0xcb, 0x6f, 0x6d, 0xc9, 0x3f,
+        0xbd, 0xe9, 0x00, 0x68, 0xb8, 0x2f, 0x74, 0xf6
+    ]);
+    
+    // Mock authentication for the non-admin user
+    env.mock_all_auths();
+    
+    // Attempt to call set_association_root with non-admin should return error
+    let result = client.set_association_root(&non_admin, &association_root);
+    
+    // Verify that the call returned an error message
+    assert_eq!(
+        result,
+        vec![
+            &env,
+            String::from_str(&env, ERROR_ONLY_ADMIN)
+        ]
+    );
+    
+    // Verify that no association root was set (should still be zero)
+    let stored_root = client.get_association_root();
+    let zero_root = BytesN::from_array(&env, &[0u8; 32]);
+    assert_eq!(stored_root, zero_root, "Association root should not be set by non-admin");
+    
+    // Verify that has_association_set returns false
+    assert_eq!(client.has_association_set(), false, "Should not have association set after failed non-admin call");
 }
 
 #[cfg(feature = "test_hash")]

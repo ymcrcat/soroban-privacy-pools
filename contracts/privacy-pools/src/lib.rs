@@ -25,6 +25,8 @@ pub const ERROR_NULLIFIER_USED: &str = "Nullifier already used";
 pub const ERROR_INSUFFICIENT_BALANCE: &str = "Insufficient balance";
 pub const ERROR_COIN_OWNERSHIP_PROOF: &str = "Couldn't verify coin ownership proof";
 pub const ERROR_WITHDRAW_SUCCESS: &str = "Withdrawal successful";
+pub const ERROR_ONLY_ADMIN: &str = "Only the admin can set association root";
+pub const SUCCESS_ASSOCIATION_ROOT_SET: &str = "Association root set successfully";
 
 const TREE_DEPTH: u32 = 2;
 
@@ -33,6 +35,7 @@ const NULL_KEY: Symbol = symbol_short!("null");
 const VK_KEY: Symbol = symbol_short!("vk");
 const TOKEN_KEY: Symbol = symbol_short!("token");
 const ASSOCIATION_ROOT_KEY: Symbol = symbol_short!("assoc");
+const ADMIN_KEY: Symbol = symbol_short!("admin");
 
 const FIXED_AMOUNT: i128 = 1000000000; // 1 XLM in stroops
 
@@ -41,7 +44,10 @@ pub struct PrivacyPoolsContract;
 
 #[contractimpl]
 impl PrivacyPoolsContract {
-    pub fn __constructor(env: &Env, vk_bytes: Bytes, token_address: Address) {
+    pub fn __constructor(env: &Env, vk_bytes: Bytes, token_address: Address, admin: Address) {
+        // Store the admin
+        env.storage().instance().set(&ADMIN_KEY, &admin);
+        
         env.storage().instance().set(&VK_KEY, &vk_bytes);
         env.storage().instance().set(&TOKEN_KEY, &token_address);
         
@@ -296,26 +302,53 @@ impl PrivacyPoolsContract {
         token_client.balance(&env.current_contract_address())
     }
 
+    /// Validates that the caller is the admin
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - The Soroban environment
+    /// * `caller` - The address to validate as admin
+    ///
+    /// # Returns
+    ///
+    /// * `true` if the caller is the admin, `false` otherwise
+    fn is_admin(env: &Env, caller: &Address) -> bool {
+        let admin: Address = env.storage().instance().get(&ADMIN_KEY).unwrap();
+        *caller == admin
+    }
+
     /// Sets the association set root for compliance verification
     ///
-    /// This function allows authorized users to update the association set root,
+    /// This function allows the admin to update the association set root,
     /// which is used to verify that withdrawals are associated with approved
     /// subsets of deposits for compliance purposes.
     ///
     /// # Arguments
     ///
     /// * `env` - The Soroban environment
-    /// * `admin` - The address of the administrator (must be authenticated)
+    /// * `caller` - The address of the caller (must be authenticated and be the admin)
     /// * `association_root` - The new association set root (32-byte hash)
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector containing status messages:
+    /// * `["Association root set successfully"]` on successful update
+    /// * `["Only the admin can set association root"]` if the caller is not the admin
     ///
     /// # Security
     ///
-    /// * Requires authentication from the admin address
-    /// * Only authorized administrators should be able to update association sets
-    pub fn set_association_root(env: &Env, admin: Address, association_root: BytesN<32>) {
-        admin.require_auth();
+    /// * Requires authentication from the caller
+    /// * Only the contract deployer (admin) can update association sets
+    pub fn set_association_root(env: &Env, caller: Address, association_root: BytesN<32>) -> Vec<String> {
+        caller.require_auth();
+        
+        // Verify that the caller is actually the admin
+        if !Self::is_admin(env, &caller) {
+            return vec![env, String::from_str(env, ERROR_ONLY_ADMIN)];
+        }
         
         env.storage().instance().set(&ASSOCIATION_ROOT_KEY, &association_root);
+        vec![env, String::from_str(env, SUCCESS_ASSOCIATION_ROOT_SET)]
     }
 
     /// Gets the current association set root
@@ -337,6 +370,15 @@ impl PrivacyPoolsContract {
         let association_root = Self::get_association_root(env);
         let zero_root = BytesN::from_array(&env, &[0u8; 32]);
         association_root != zero_root
+    }
+
+    /// Gets the admin address (the contract deployer)
+    ///
+    /// # Returns
+    ///
+    /// * The address of the admin (contract deployer)
+    pub fn get_admin(env: &Env) -> Address {
+        env.storage().instance().get(&ADMIN_KEY).unwrap()
     }
 
     /// Helper function to convert BlsScalar to decimal string for logging
