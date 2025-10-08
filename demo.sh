@@ -43,7 +43,7 @@ soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK 
 
 # Step 2: Generate coin
 echo "🪙 Generating coin..."
-cargo run --bin coinutils generate demo_pool demo_coin.json || { echo "❌ Error: Failed to generate coin"; exit 1; }
+cargo run --bin coinutils generate demo_pool -o demo_coin.json || { echo "❌ Error: Failed to generate coin"; exit 1; }
 COMMITMENT_HEX=$(cat demo_coin.json | jq -r '.commitment_hex' | sed 's/^0x//')
 if [ -z "$COMMITMENT_HEX" ]; then
     echo "❌ Error: Failed to extract commitment hex"
@@ -69,7 +69,7 @@ echo "{
 
 echo "🏷️  Creating association set..."
 LABEL=$(cat demo_coin.json | jq -r '.coin.label')
-cargo run --bin coinutils updateAssociation demo_association.json "$LABEL" || { echo "❌ Error: Failed to create association set"; exit 1; }
+cargo run --bin coinutils update-association demo_association.json "$LABEL" || { echo "❌ Error: Failed to create association set"; exit 1; }
 
 # Extract association root from the association set and set it in the contract
 echo "🔗 Setting association root in contract..."
@@ -103,7 +103,7 @@ soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK 
 echo "✅ Association root set successfully"
 
 echo "🔐 Creating withdrawal proof..."
-cargo run --bin coinutils withdraw demo_coin.json demo_state.json demo_association.json withdrawal_input.json || { echo "❌ Error: Failed to create withdrawal input"; exit 1; }
+cargo run --bin coinutils withdraw demo_coin.json demo_state.json demo_association.json -o withdrawal_input.json || { echo "❌ Error: Failed to create withdrawal input"; exit 1; }
 echo "📝 Generating witness and proof..."
 cd circuits
 node build/main_js/generate_witness.js build/main_js/main.wasm ../withdrawal_input.json witness.wtns || { echo "❌ Error: Failed to generate witness"; exit 1; }
