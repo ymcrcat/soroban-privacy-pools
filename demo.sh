@@ -71,6 +71,37 @@ echo "🏷️  Creating association set..."
 LABEL=$(cat demo_coin.json | jq -r '.coin.label')
 cargo run --bin coinutils updateAssociation demo_association.json "$LABEL" || { echo "❌ Error: Failed to create association set"; exit 1; }
 
+# Extract association root from the association set and set it in the contract
+echo "🔗 Setting association root in contract..."
+ASSOCIATION_ROOT_DECIMAL=$(cat demo_association.json | jq -r '.root')
+if [ -z "$ASSOCIATION_ROOT_DECIMAL" ] || [ "$ASSOCIATION_ROOT_DECIMAL" = "null" ]; then
+    echo "❌ Error: Failed to extract association root from association set"
+    exit 1
+fi
+
+# Convert decimal string to hex using Python (since it handles big integers well)
+ASSOCIATION_ROOT_HEX=$(python3 -c "
+import sys
+decimal_str = sys.argv[1]
+# Convert decimal to hex
+hex_str = hex(int(decimal_str))[2:]  # Remove '0x' prefix
+# Pad to 64 hex characters (32 bytes)
+padded_hex = hex_str.zfill(64)
+print(padded_hex)
+" "$ASSOCIATION_ROOT_DECIMAL")
+
+if [ -z "$ASSOCIATION_ROOT_HEX" ]; then
+    echo "❌ Error: Failed to convert association root to hex format"
+    exit 1
+fi
+
+echo "🔍 Debug: Association root decimal: $ASSOCIATION_ROOT_DECIMAL"
+echo "🔍 Debug: Association root hex: $ASSOCIATION_ROOT_HEX"
+
+# Note: Only the admin (contract deployer) can set association root
+soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- set_association_root --caller demo_user --association_root $ASSOCIATION_ROOT_HEX || { echo "❌ Error: Failed to set association root"; exit 1; }
+echo "✅ Association root set successfully"
+
 echo "🔐 Creating withdrawal proof..."
 cargo run --bin coinutils withdraw demo_coin.json demo_state.json demo_association.json withdrawal_input.json || { echo "❌ Error: Failed to create withdrawal input"; exit 1; }
 echo "📝 Generating witness and proof..."
@@ -88,12 +119,6 @@ if [ -z "$PROOF_HEX" ] || [ -z "$PUBLIC_HEX" ]; then
     exit 1
 fi
 
-# Extract association root from public signals and set it in the contract
-echo "🔗 Setting association root in contract..."
-ASSOCIATION_ROOT_HEX=$(echo "$PUBLIC_HEX" | tail -c 65) # Last 64 hex chars (32 bytes) for association root
-# Note: Only the admin (contract deployer) can set association root
-soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- set_association_root --caller demo_user --association_root $ASSOCIATION_ROOT_HEX || { echo "❌ Error: Failed to set association root"; exit 1; }
-echo "✅ Association root set successfully"
 # Step 6: Withdraw
 echo "💸 Withdrawing coin..."
 soroban contract invoke --id $CONTRACT_ID --source demo_user --network $NETWORK -- withdraw --to demo_user --proof_bytes "$PROOF_HEX" --pub_signals_bytes "$PUBLIC_HEX" || { echo "❌ Error: Failed to withdraw coin"; exit 1; }

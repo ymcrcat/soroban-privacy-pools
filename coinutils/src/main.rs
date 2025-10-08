@@ -61,6 +61,7 @@ struct StateFile {
 struct AssociationSetFile {
     labels: std::vec::Vec<String>,
     scope: String,
+    root: Option<String>, // Merkle tree root of the association set
 }
 
 fn random_fr(env: &Env) -> BlsScalar {
@@ -328,7 +329,7 @@ fn withdraw_coin(env: &Env, coin: &CoinData, state_file: &StateFile, association
     })
 }
 
-fn update_association_set(_env: &Env, filename: &str, label: &str) -> Result<(), String> {
+fn update_association_set(env: &Env, filename: &str, label: &str) -> Result<(), String> {
     // Try to read existing association set file
     let mut association_set = if std::path::Path::new(filename).exists() {
         let content = std::fs::read_to_string(filename)
@@ -340,6 +341,7 @@ fn update_association_set(_env: &Env, filename: &str, label: &str) -> Result<(),
         AssociationSetFile {
             labels: std::vec::Vec::new(),
             scope: "default_scope".to_string(),
+            root: None,
         }
     };
 
@@ -352,6 +354,25 @@ fn update_association_set(_env: &Env, filename: &str, label: &str) -> Result<(),
         
         association_set.labels.push(label.to_string());
         
+        // Compute the Merkle tree root for the association set
+        if !association_set.labels.is_empty() {
+            // Build association set merkle tree (depth 2)
+            let mut association_tree = LeanIMT::new(env, 2); // depth 2 for association set
+            
+            for label_str in &association_set.labels {
+                let label_fr = decimal_string_to_bls_scalar(env, label_str)
+                    .map_err(|e| format!("Invalid association label: {}", e))?;
+                
+                // Convert BlsScalar to bytes and insert into association tree
+                let label_bytes = lean_imt::bls_scalar_to_bytes(label_fr);
+                association_tree.insert(label_bytes);
+            }
+            
+            // Get the root and convert to decimal string
+            let association_root_scalar = lean_imt::bytes_to_bls_scalar(&association_tree.get_root());
+            association_set.root = Some(bls_scalar_to_decimal_string(&association_root_scalar));
+        }
+        
         // Save updated association set
         let json = serde_json::to_string_pretty(&association_set)
             .map_err(|e| format!("Failed to serialize association set: {}", e))?;
@@ -361,6 +382,9 @@ fn update_association_set(_env: &Env, filename: &str, label: &str) -> Result<(),
             .map_err(|e| format!("Failed to write association set file: {}", e))?;
         
         println!("Added label '{}' to association set. Total labels: {}", label, association_set.labels.len());
+        if let Some(ref root) = association_set.root {
+            println!("Association set root: {}", root);
+        }
     } else {
         println!("Label '{}' already exists in association set", label);
     }
@@ -388,7 +412,8 @@ fn print_usage() {
     println!("Association set file format:");
     println!("  {{");
     println!("    \"labels\": [\"label1\", \"label2\", \"label3\", \"label4\"],");
-    println!("    \"scope\": \"pool_scope\"");
+    println!("    \"scope\": \"pool_scope\",");
+    println!("    \"root\": \"merkle_tree_root\"");
     println!("  }}");
 }
 
