@@ -20,7 +20,22 @@ use num_bigint::BigUint;
 #[cfg(test)]
 mod test;
 
-// Error messages
+use soroban_sdk::contracterror;
+
+// Contract errors
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    NullifierUsed = 1,
+    InsufficientBalance = 2,
+    CoinOwnershipProofFailed = 3,
+    OnlyAdmin = 4,
+    TreeAtCapacity = 5,
+    AssociationRootMismatch = 6,
+}
+
+// Error messages for Vec<String> returns (legacy compatibility)
 pub const ERROR_NULLIFIER_USED: &str = "Nullifier already used";
 pub const ERROR_INSUFFICIENT_BALANCE: &str = "Insufficient balance";
 pub const ERROR_COIN_OWNERSHIP_PROOF: &str = "Couldn't verify coin ownership proof";
@@ -66,8 +81,8 @@ impl PrivacyPoolsContract {
     /// * `commitment` - The commitment to store
     /// 
     /// # Returns
-    /// * A tuple of (updated_merkle_root, leaf_index) after insertion
-    fn store_commitment(env: &Env, commitment: BytesN<32>) -> (BytesN<32>, u32) {
+    /// * A Result containing a tuple of (updated_merkle_root, leaf_index) after insertion
+    fn store_commitment(env: &Env, commitment: BytesN<32>) -> Result<(BytesN<32>, u32), Error> {
         // Load current tree state
         let leaves: Vec<BytesN<32>> = env.storage().instance().get(&TREE_LEAVES_KEY)
             .unwrap_or(vec![&env]);
@@ -78,7 +93,7 @@ impl PrivacyPoolsContract {
         
         // Create tree and insert new commitment
         let mut tree = LeanIMT::from_storage(env, leaves, depth, root);
-        tree.insert(commitment);
+        tree.insert(commitment).map_err(|_| Error::TreeAtCapacity)?;
         
         // Get the leaf index (it's the last leaf in the tree)
         let leaf_index = tree.get_leaf_count() - 1;
@@ -89,7 +104,7 @@ impl PrivacyPoolsContract {
         env.storage().instance().set(&TREE_DEPTH_KEY, &new_depth);
         env.storage().instance().set(&TREE_ROOT_KEY, &new_root);
 
-        (new_root, leaf_index)
+        Ok((new_root, leaf_index))
     }
 
     /// Deposits funds into the privacy pool and stores a commitment in the merkle tree.
@@ -119,7 +134,7 @@ impl PrivacyPoolsContract {
     ///
     /// * Updates the merkle tree with the new commitment
     /// * Transfers the asset from the depositor to the contract
-    pub fn deposit(env: &Env, from: Address, commitment: BytesN<32>) -> u32 {
+    pub fn deposit(env: &Env, from: Address, commitment: BytesN<32>) -> Result<u32, Error> {
         from.require_auth();
         
         // Get the stored token address
@@ -130,9 +145,9 @@ impl PrivacyPoolsContract {
         token_client.transfer(&from, &env.current_contract_address(), &FIXED_AMOUNT);
         
         // Store the commitment in the merkle tree
-        let (_, leaf_index) = Self::store_commitment(env, commitment);
+        let (_, leaf_index) = Self::store_commitment(env, commitment)?;
 
-        leaf_index
+        Ok(leaf_index)
     }
 
     /// Withdraws funds from the privacy pool using a zero-knowledge proof.

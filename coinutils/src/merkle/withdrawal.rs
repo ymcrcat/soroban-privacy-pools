@@ -42,7 +42,7 @@ impl WithdrawalManager {
             
             // Convert BlsScalar to bytes and insert into lean-imt
             let commitment_bytes = lean_imt::bls_scalar_to_bytes(commitment_fr.clone());
-            tree.insert(commitment_bytes);
+            tree.insert(commitment_bytes)?;
             
             // Check if this is the commitment we're withdrawing
             if commitment_fr == commitment {
@@ -120,7 +120,7 @@ impl WithdrawalManager {
             
             // Convert BlsScalar to bytes and insert into association tree
             let label_bytes = lean_imt::bls_scalar_to_bytes(label_fr.clone());
-            association_tree.insert(label_bytes);
+            association_tree.insert(label_bytes)?;
             
             // Check if this is the label we're using
             if label_fr == *label {

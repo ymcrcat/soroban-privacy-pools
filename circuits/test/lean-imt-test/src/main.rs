@@ -98,7 +98,7 @@ fn compute_merkle_proof(env: &Env, leaves: &[u64], leaf_index: u32) -> MerklePro
     let mut tree = LeanIMT::new(env, 2);
     
     for &leaf in leaves {
-        tree.insert_u64(leaf);
+        tree.insert_u64(leaf).unwrap();
     }
     
     // Generate the merkle proof for the specified leaf index

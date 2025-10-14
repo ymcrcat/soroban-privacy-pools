@@ -33,6 +33,7 @@ pub struct LeanIMT<'a> {
     env: &'a Env,
     leaves: Vec<BytesN<32>>,
     depth: u32,
+    capacity: u32,  // Pre-computed capacity (2^depth), cached for efficiency
     root: BytesN<32>,
     poseidon: Poseidon255<'a>,
     // Hybrid cache system:
@@ -47,10 +48,12 @@ pub struct LeanIMT<'a> {
 impl<'a> LeanIMT<'a> {
     /// Creates a new LeanIMT with a fixed depth. Missing leaves are assumed zero.
     pub fn new(env: &'a Env, depth: u32) -> Self {
+        let capacity = 1u32.checked_shl(depth).unwrap_or(u32::MAX);
         let mut tree = Self {
             env,
             leaves: vec![env],
             depth,
+            capacity,
             root: BytesN::from_array(env, &[0u8; 32]),
             poseidon: Poseidon255::new_with_t(env, 3),
             subtree_cache: Map::new(env),
@@ -62,16 +65,24 @@ impl<'a> LeanIMT<'a> {
 
     /// Inserts a new leaf into the tree (appends; missing leaves remain zero)
     /// Uses incremental path recomputation for efficiency (Clever shortcut 2)
-    pub fn insert(&mut self, leaf: BytesN<32>) {
+    /// Returns Err if the tree is at capacity (2^depth leaves)
+    pub fn insert(&mut self, leaf: BytesN<32>) -> Result<(), &'static str> {
+        let current_count = self.leaves.len() as u32;
+        
+        if current_count >= self.capacity {
+            return Err("Tree is at capacity: cannot insert more leaves");
+        }
+        
         self.leaves.push_back(leaf);
         self.incremental_update();
+        Ok(())
     }
 
     /// Inserts a u64 leaf (converts to BlsScalar internally)
-    pub fn insert_u64(&mut self, leaf_value: u64) {
+    pub fn insert_u64(&mut self, leaf_value: u64) -> Result<(), &'static str> {
         let leaf_scalar = u64_to_bls_scalar(self.env, leaf_value);
         let leaf_bytes = bls_scalar_to_bytes(leaf_scalar);
-        self.insert(leaf_bytes);
+        self.insert(leaf_bytes)
     }
 
     /// Gets the current root of the tree
@@ -92,6 +103,16 @@ impl<'a> LeanIMT<'a> {
     /// Gets the number of leaves that have been explicitly inserted
     pub fn get_leaf_count(&self) -> u32 {
         self.leaves.len() as u32
+    }
+
+    /// Gets the maximum capacity of the tree (2^depth)
+    pub fn get_capacity(&self) -> u32 {
+        self.capacity
+    }
+
+    /// Checks if the tree is at capacity
+    pub fn is_full(&self) -> bool {
+        self.get_leaf_count() >= self.get_capacity()
     }
 
     /// Generates a merkle proof for a given leaf index
@@ -350,10 +371,12 @@ impl<'a> LeanIMT<'a> {
 
     /// Deserializes the tree state from storage
     pub fn from_storage(env: &'a Env, leaves: Vec<BytesN<32>>, depth: u32, root: BytesN<32>) -> Self {
+        let capacity = 1u32.checked_shl(depth).unwrap_or(u32::MAX);
         let mut tree = Self {
             env,
             leaves,
             depth,
+            capacity,
             root,
             poseidon: Poseidon255::new_with_t(env, 3),
             subtree_cache: Map::new(env),

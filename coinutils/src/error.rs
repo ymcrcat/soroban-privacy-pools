@@ -31,6 +31,15 @@ pub enum CoinUtilsError {
     
     #[error("Invalid decimal character: {0}")]
     InvalidDecimalCharacter(char),
+    
+    #[error("LeanIMT error: {0}")]
+    LeanIMT(String),
+}
+
+impl From<&str> for CoinUtilsError {
+    fn from(err: &str) -> Self {
+        CoinUtilsError::LeanIMT(err.to_string())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, CoinUtilsError>;

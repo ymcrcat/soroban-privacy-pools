@@ -14,8 +14,8 @@ fn test_insert_u64() {
     let env = Env::default();
     let mut tree = LeanIMT::new(&env, 1);
     
-    tree.insert_u64(0);
-    tree.insert_u64(0);
+    tree.insert_u64(0).unwrap();
+    tree.insert_u64(0).unwrap();
     
     assert_eq!(tree.get_depth(), 1);
     assert_eq!(tree.get_leaf_count(), 2);
@@ -46,8 +46,8 @@ fn test_compute_node_at_level_multiple_levels() {
     let mut tree = LeanIMT::new(&env, 1);
     
     // Insert 2 leaves to create a 1-level tree
-    tree.insert_u64(0);
-    tree.insert_u64(1);
+    tree.insert_u64(0).unwrap();
+    tree.insert_u64(1).unwrap();
     
     assert_eq!(tree.get_depth(), 1);
     assert_eq!(tree.get_leaf_count(), 2);
@@ -75,8 +75,8 @@ fn test_generate_proof_two_leaves() {
     let mut tree = LeanIMT::new(&env, 1);
     
     // Insert exactly 2 leaves to test the special 2-leaf case
-    tree.insert_u64(1);
-    tree.insert_u64(2);
+    tree.insert_u64(1).unwrap();
+    tree.insert_u64(2).unwrap();
     
     assert_eq!(tree.get_depth(), 1);
     assert_eq!(tree.get_leaf_count(), 2);
@@ -264,10 +264,10 @@ fn test_depth_2_tree_proof() {
     let mut tree = LeanIMT::new(&env, 2);
     
     // Insert 4 leaves to fill the depth 2 tree
-    tree.insert_u64(1);
-    tree.insert_u64(2);
-    tree.insert_u64(3);
-    tree.insert_u64(4);
+    tree.insert_u64(1).unwrap();
+    tree.insert_u64(2).unwrap();
+    tree.insert_u64(3).unwrap();
+    tree.insert_u64(4).unwrap();
     
     // Test proof generation for each leaf
     for leaf_index in 0..4 {
@@ -300,15 +300,15 @@ fn test_incremental_update_functional_approach() {
     let mut tree = LeanIMT::new(&env, 3); // Depth 3 tree (8 leaves)
     
     // Insert some leaves
-    tree.insert_u64(1);
-    tree.insert_u64(2);
-    tree.insert_u64(3);
+    tree.insert_u64(1).unwrap();
+    tree.insert_u64(2).unwrap();
+    tree.insert_u64(3).unwrap();
     
     // Get the root after 3 insertions
     let root_after_3 = tree.get_root();
     
     // Insert one more leaf using incremental update
-    tree.insert_u64(4);
+    tree.insert_u64(4).unwrap();
     
     // Get the root after 4 insertions
     let root_after_4 = tree.get_root();
@@ -318,10 +318,10 @@ fn test_incremental_update_functional_approach() {
     
     // Verify that the incremental update produces the same result as full recomputation
     let mut tree_full_recompute = LeanIMT::new(&env, 3);
-    tree_full_recompute.insert_u64(1);
-    tree_full_recompute.insert_u64(2);
-    tree_full_recompute.insert_u64(3);
-    tree_full_recompute.insert_u64(4);
+    tree_full_recompute.insert_u64(1).unwrap();
+    tree_full_recompute.insert_u64(2).unwrap();
+    tree_full_recompute.insert_u64(3).unwrap();
+    tree_full_recompute.insert_u64(4).unwrap();
     
     assert_eq!(root_after_4, tree_full_recompute.get_root(), 
                "Incremental update should produce same result as full recomputation");
@@ -335,7 +335,7 @@ fn test_path_recomputation_efficiency() {
     
     // Insert many leaves to test efficiency
     for i in 1..=10 {
-        tree.insert_u64(i);
+        tree.insert_u64(i).unwrap();
     }
     
     // Verify the tree is in a consistent state
@@ -368,7 +368,7 @@ fn test_depth_20_tree_with_leaves() {
     // Insert some leaves to test the tree functionality
     let num_leaves = 20u32; // Insert 20 leaves out of 1048576 possible (reduced for performance)
     for i in 1..=num_leaves {
-        tree.insert_u64(i as u64);
+        tree.insert_u64(i as u64).unwrap();
     }
     
     // Verify the tree state
@@ -409,7 +409,7 @@ fn test_depth_20_tree_proof_generation() {
     // Insert some leaves to test proof generation
     let num_leaves = 10u32; // Insert 10 leaves (reduced for performance)
     for i in 1..=num_leaves {
-        tree.insert_u64(i as u64);
+        tree.insert_u64(i as u64).unwrap();
     }
     
     // Test proof generation for a sample of inserted leaves (not all for performance)
@@ -462,9 +462,9 @@ fn test_from_storage_deserialization() {
     
     // Create a tree with some leaves
     let mut tree = LeanIMT::new(&env, 4);
-    tree.insert_u64(1);
-    tree.insert_u64(2);
-    tree.insert_u64(3);
+    tree.insert_u64(1).unwrap();
+    tree.insert_u64(2).unwrap();
+    tree.insert_u64(3).unwrap();
     
     // Serialize to storage
     let (leaves, depth, root) = tree.to_storage();
@@ -502,10 +502,10 @@ fn test_storage_serialization_comprehensive() {
     
     // Test 2: Tree with multiple leaves
     let mut tree_with_leaves = LeanIMT::new(&env, 4);
-    tree_with_leaves.insert_u64(42);
-    tree_with_leaves.insert_u64(123);
-    tree_with_leaves.insert_u64(456);
-    tree_with_leaves.insert_u64(789);
+    tree_with_leaves.insert_u64(42).unwrap();
+    tree_with_leaves.insert_u64(123).unwrap();
+    tree_with_leaves.insert_u64(456).unwrap();
+    tree_with_leaves.insert_u64(789).unwrap();
     
     let (leaves, depth, root) = tree_with_leaves.to_storage();
     let mut deserialized_with_leaves = LeanIMT::from_storage(&env, leaves, depth, root.clone());
@@ -539,7 +539,7 @@ fn test_storage_serialization_comprehensive() {
     }
     
     // Test 5: Verify we can continue inserting after deserialization
-    deserialized_with_leaves.insert_u64(999);
+    deserialized_with_leaves.insert_u64(999).unwrap();
     assert_eq!(deserialized_with_leaves.get_leaf_count(), 5);
     
     // Test 6: Verify root changes after insertion
@@ -554,9 +554,9 @@ fn test_storage_roundtrip_consistency() {
     
     // Create a tree and perform multiple roundtrips
     let mut original_tree = LeanIMT::new(&env, 6);
-    original_tree.insert_u64(1);
-    original_tree.insert_u64(2);
-    original_tree.insert_u64(3);
+    original_tree.insert_u64(1).unwrap();
+    original_tree.insert_u64(2).unwrap();
+    original_tree.insert_u64(3).unwrap();
     
     let original_root = original_tree.get_root();
     let original_leaf_count = original_tree.get_leaf_count();
@@ -577,6 +577,77 @@ fn test_storage_roundtrip_consistency() {
             let proof = current_tree.generate_proof(i as u32);
             assert!(proof.is_some(), "Should be able to generate proof for leaf {} in round {}", i, round);
         }
+    }
+}
+
+#[test]
+fn test_capacity_check() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    
+    // Test tree with depth 2 (capacity = 4)
+    let mut tree = LeanIMT::new(&env, 2);
+    
+    // Verify initial capacity
+    assert_eq!(tree.get_capacity(), 4);
+    assert!(!tree.is_full());
+    
+    // Insert up to capacity
+    tree.insert_u64(1).unwrap();
+    assert_eq!(tree.get_leaf_count(), 1);
+    assert!(!tree.is_full());
+    
+    tree.insert_u64(2).unwrap();
+    assert_eq!(tree.get_leaf_count(), 2);
+    assert!(!tree.is_full());
+    
+    tree.insert_u64(3).unwrap();
+    assert_eq!(tree.get_leaf_count(), 3);
+    assert!(!tree.is_full());
+    
+    tree.insert_u64(4).unwrap();
+    assert_eq!(tree.get_leaf_count(), 4);
+    assert!(tree.is_full());
+}
+
+#[test]
+fn test_insert_beyond_capacity_returns_error() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    
+    // Create a small tree with depth 1 (capacity = 2)
+    let mut tree = LeanIMT::new(&env, 1);
+    
+    // Fill the tree
+    tree.insert_u64(1).unwrap();
+    tree.insert_u64(2).unwrap();
+    
+    // This should return an error
+    let result = tree.insert_u64(3);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), "Tree is at capacity: cannot insert more leaves");
+}
+
+#[test]
+fn test_capacity_for_various_depths() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    
+    // Test various depths and their capacities
+    let test_cases = [
+        (0, 1),
+        (1, 2),
+        (2, 4),
+        (3, 8),
+        (4, 16),
+        (5, 32),
+        (10, 1024),
+    ];
+    
+    for (depth, expected_capacity) in test_cases {
+        let tree = LeanIMT::new(&env, depth);
+        assert_eq!(tree.get_capacity(), expected_capacity, 
+                   "Capacity for depth {} should be {}", depth, expected_capacity);
     }
 }
 

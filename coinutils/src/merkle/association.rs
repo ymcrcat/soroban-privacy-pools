@@ -54,7 +54,7 @@ impl AssociationManager {
                     
                     // Convert BlsScalar to bytes and insert into association tree
                     let label_bytes = lean_imt::bls_scalar_to_bytes(label_fr);
-                    association_tree.insert(label_bytes);
+                    association_tree.insert(label_bytes)?;
                 }
                 
                 // Get the root and convert to decimal string
