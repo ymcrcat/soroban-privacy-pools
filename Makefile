@@ -2,6 +2,7 @@ CIRCOMLIB=/opt/homebrew/lib/node_modules/circomlib/circuits
 CIRCUITS=circuits/main.circom circuits/commitment.circom circuits/merkleProof.circom
 
 .circuits: $(CIRCUITS)
+	@mkdir -p circuits/build
 	@cd circuits && circom main.circom --r1cs --wasm --sym -o build -l $(CIRCOMLIB) --prime bls12381
 	@cd circuits && circom dummy.circom --r1cs --wasm --sym -o build -l $(CIRCOMLIB) --prime bls12381
 	@cd circuits/test && circom test_merkleProof.circom --wasm -o ../build -l $(CIRCOMLIB) --prime bls12381
