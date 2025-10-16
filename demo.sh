@@ -22,7 +22,7 @@ cargo build --target wasm32v1-none --release -p privacy-pools || { echo "❌ Err
 stellar contract optimize --wasm target/wasm32v1-none/release/privacy_pools.wasm --wasm-out target/wasm32v1-none/release/privacy_pools.optimized.wasm || { echo "❌ Error: Failed to optimize WASM"; exit 1; }
 # Convert verification key to hex format and extract it
 echo "🔑 Converting verification key..."
-cargo run --bin circom2soroban vk output/main_verification_key.json > vk_hex.txt || { echo "❌ Error: Failed to convert verification key"; exit 1; }
+cargo run --bin circom2soroban vk circuits/output/main_verification_key.json > vk_hex.txt || { echo "❌ Error: Failed to convert verification key"; exit 1; }
 VK_HEX=$(cat vk_hex.txt | grep -o '[0-9a-f]*$')
 if [ -z "$VK_HEX" ]; then
     echo "❌ Error: Failed to extract verification key hex"
@@ -107,7 +107,7 @@ cargo run --bin coinutils withdraw demo_coin.json demo_state.json demo_associati
 echo "📝 Generating witness and proof..."
 cd circuits
 node build/main_js/generate_witness.js build/main_js/main.wasm ../withdrawal_input.json witness.wtns || { echo "❌ Error: Failed to generate witness"; exit 1; }
-snarkjs groth16 prove ../output/main_final.zkey witness.wtns proof.json public.json || { echo "❌ Error: Failed to generate proof"; exit 1; }
+snarkjs groth16 prove output/main_final.zkey witness.wtns proof.json public.json || { echo "❌ Error: Failed to generate proof"; exit 1; }
 cd ..
 echo "🔄 Converting proof for Soroban..."
 cargo run --bin circom2soroban proof circuits/proof.json > proof_hex.txt || { echo "❌ Error: Failed to convert proof"; exit 1; }
