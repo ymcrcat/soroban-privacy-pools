@@ -35,7 +35,7 @@ pub struct LeanIMT<'a> {
     depth: u32,
     capacity: u32,  // Pre-computed capacity (2^depth), cached for efficiency
     root: BytesN<32>,
-    poseidon: Poseidon255<'a>,
+    poseidon: Poseidon255,
     // Hybrid cache system:
     // 1. subtree_cache: Dynamic programming cache for empty tree levels
     //    Key: level -> Value: hash of subtrees at that level (all identical for empty trees)
@@ -55,7 +55,7 @@ impl<'a> LeanIMT<'a> {
             depth,
             capacity,
             root: BytesN::from_array(env, &[0u8; 32]),
-            poseidon: Poseidon255::new_with_t(env, 3),
+            poseidon: Poseidon255::new(env, 3),
             subtree_cache: Map::new(env),
             sparse_cache: Map::new(env),
         };
@@ -361,7 +361,7 @@ impl<'a> LeanIMT<'a> {
 
     /// Hashes two BlsScalar values using Poseidon hash function
     fn hash_pair(&self, left: BlsScalar, right: BlsScalar) -> BlsScalar {
-        self.poseidon.hash_two(&left, &right)
+        self.poseidon.hash_two(self.env, &left, &right)
     }
 
     /// Serializes the tree state for storage
@@ -378,7 +378,7 @@ impl<'a> LeanIMT<'a> {
             depth,
             capacity,
             root,
-            poseidon: Poseidon255::new_with_t(env, 3),
+            poseidon: Poseidon255::new(env, 3),
             subtree_cache: Map::new(env),
             sparse_cache: Map::new(env),
         };
