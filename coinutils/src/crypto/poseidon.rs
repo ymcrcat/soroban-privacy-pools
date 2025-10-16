@@ -3,17 +3,17 @@ use poseidon::Poseidon255;
 
 /// Poseidon-based hash for field elements
 pub fn poseidon_hash(env: &Env, inputs: &[BlsScalar]) -> BlsScalar {
-    let poseidon1 = Poseidon255::new(env);
-    let poseidon2 = Poseidon255::new_with_t(env, 3);
+    let poseidon1 = Poseidon255::new(env, 2);
+    let poseidon2 = Poseidon255::new(env, 3);
     
     match inputs.len() {
-        1 => poseidon1.hash(&inputs[0]),
-        2 => poseidon2.hash_two(&inputs[0], &inputs[1]),
+        1 => poseidon1.hash(env, &inputs[0]),
+        2 => poseidon2.hash_two(env, &inputs[0], &inputs[1]),
         _ => {
             // For more than 2 inputs, hash them sequentially
             let mut result = inputs[0].clone();
             for input in inputs.iter().skip(1) {
-                result = poseidon2.hash_two(&result, input);
+                result = poseidon2.hash_two(env, &result, input);
             }
             result
         }
