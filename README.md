@@ -603,7 +603,7 @@ cargo run --bin coinutils withdraw demo_coin.json demo_state.json demo_associati
 # Generate witness and proof using the main circuit
 cd circuits
 node build/main_js/generate_witness.js build/main_js/main.wasm ../withdrawal_input.json witness.wtns
-snarkjs groth16 prove output/main_final.zkey witness.wtns proof.json public.json
+snarkjs groth16 prove ../output/main_final.zkey witness.wtns proof.json public.json
 
 # Convert proof and public signals for Soroban
 cd ..
