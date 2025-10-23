@@ -2,7 +2,7 @@
 
 > **Warning**: This project is currently a work in progress and is a merely a prototype for educational purposed only. It does not yet constitute a secure or functional system. Features and APIs may change. No warranty provided.
 
-
+> **Warning regarding Poseidon hash implementation**: This repository contains an implementation of the Poseidon hash. This proprietary implementation was put in place to serve this proof of concept and have a hash that is consistent between the Circom circuit and Rust code. It is currently not audited for security and should not be used as a reference code for secure Poseidon implementations.
 
 A privacy-preserving transaction system built on Stellar using Soroban smart contracts and zero-knowledge proofs (zkSNARKs). This project implements privacy pools that allow users to deposit and withdraw tokens while maintaining transaction privacy through cryptographic commitments and Merkle tree inclusion proofs. It includes compliance enablement features through the use of Association Sets.
 
