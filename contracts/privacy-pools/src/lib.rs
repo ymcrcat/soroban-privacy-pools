@@ -195,6 +195,11 @@ impl PrivacyPoolsContract {
             pub_signals_bytes: Bytes) -> Vec<String> {
         to.require_auth();
 
+        // Require association root to be set before any withdrawal
+        if !Self::has_association_set(env) {
+            return vec![env, String::from_str(env, "Association root must be set before withdrawal")]
+        }
+
         // Get the stored token address
         let token_address: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
 
@@ -216,21 +221,19 @@ impl PrivacyPoolsContract {
         let proof_root = &pub_signals.pub_signals.get(2).unwrap();
         let proof_association_root = &pub_signals.pub_signals.get(3).unwrap();
 
-        // Verify association set root if one is configured
-        if Self::has_association_set(env) {
-            let stored_association_root = Self::get_association_root(env);
-            let stored_association_scalar = lean_imt::bytes_to_bls_scalar(&stored_association_root);
-            let stored_association_str = Self::bls_scalar_to_decimal_string(env, &stored_association_scalar);
-            
-            let proof_association_u256 = proof_association_root.to_u256();
-            let proof_association_bytes = proof_association_u256.to_be_bytes();
-            let mut proof_association_array = [0u8; 32];
-            proof_association_bytes.copy_into_slice(&mut proof_association_array);
-            let proof_association_str = Self::bytes_to_decimal_string(env, &proof_association_array);
-            
-            if stored_association_str != proof_association_str {
-                return vec![env, String::from_str(env, "Association set root mismatch")]
-            }
+        // Verify association set root matches the proof
+        let stored_association_root = Self::get_association_root(env);
+        let stored_association_scalar = lean_imt::bytes_to_bls_scalar(&stored_association_root);
+        let stored_association_str = Self::bls_scalar_to_decimal_string(env, &stored_association_scalar);
+        
+        let proof_association_u256 = proof_association_root.to_u256();
+        let proof_association_bytes = proof_association_u256.to_be_bytes();
+        let mut proof_association_array = [0u8; 32];
+        proof_association_bytes.copy_into_slice(&mut proof_association_array);
+        let proof_association_str = Self::bytes_to_decimal_string(env, &proof_association_array);
+        
+        if stored_association_str != proof_association_str {
+            return vec![env, String::from_str(env, "Association set root mismatch")]
         }
 
         // Check if nullifier has been used before

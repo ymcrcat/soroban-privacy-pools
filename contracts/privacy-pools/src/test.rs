@@ -171,7 +171,7 @@ fn init_erronous_pub_signals(env: &Env) -> Bytes {
     let public_0 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x65, 0x18, 0x92, 0xef, 0x37, 0x4f, 0x78, 0x93, 0x82, 0x36, 0xd4, 0x83, 0x2b, 0x62, 0xd3, 0x5f, 0xb7, 0x9c, 0x54, 0xf8, 0x72, 0xe3, 0x0f, 0x5a, 0xa9, 0xab, 0xf9, 0xe6, 0xab, 0x15, 0xcb, 0x41]));
     let public_1 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3b, 0x9a, 0xca, 0x00]));
     let public_2 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x43, 0xc7, 0x5b, 0x13, 0x4d, 0x38, 0x9a, 0x5f, 0x97, 0x8c, 0xec, 0x2a, 0x75, 0x91, 0x10, 0xe9, 0x9d, 0x1b, 0x9b, 0x7b, 0xe0, 0x34, 0x45, 0xbd, 0xb9, 0x64, 0xd3, 0x43, 0x92, 0xc5, 0x79, 0x63]));
-    let public_3 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])); // Zero association root
+    let public_3 = U256::from_be_bytes(&env, &Bytes::from_array(&env, &[0x0c, 0x62, 0x9c, 0xe5, 0x84, 0xbe, 0xbb, 0xc0, 0xd7, 0x6e, 0x7a, 0x23, 0xbc, 0x66, 0x7c, 0x57, 0xc7, 0xe9, 0xf2, 0xcb, 0x6f, 0x6d, 0xc9, 0x3f, 0xbd, 0xe9, 0x00, 0x68, 0xb8, 0x2f, 0x74, 0xf6])); // Same association root as correct proof
     
     // Create output vector for verification: [nullifierHash, withdrawnValue, stateRoot, associationRoot]
     let output = Vec::from_array(&env, [Fr::from_u256(public_0), Fr::from_u256(public_1), Fr::from_u256(public_2), Fr::from_u256(public_3)]);
@@ -291,7 +291,7 @@ fn test_deposit_and_withdraw_correct_proof() {
 #[test]
 fn test_deposit_and_withdraw_wrong_proof() {
     let env = Env::default();
-    let (token_id, contract_id, _admin) = setup_test_environment(&env);
+    let (token_id, contract_id, admin) = setup_test_environment(&env);
     
     // Create test addresses
     let alice = Address::generate(&env);
@@ -325,7 +325,17 @@ fn test_deposit_and_withdraw_wrong_proof() {
     assert_eq!(commitments.len(), 1);
     assert_eq!(commitments.get(0).unwrap(), commitment);
 
-    // Test withdraw with wrong proof
+    // Set association root to match the erroneous pub signals
+    let association_root = BytesN::from_array(&env, &[
+        0x0c, 0x62, 0x9c, 0xe5, 0x84, 0xbe, 0xbb, 0xc0,
+        0xd7, 0x6e, 0x7a, 0x23, 0xbc, 0x66, 0x7c, 0x57,
+        0xc7, 0xe9, 0xf2, 0xcb, 0x6f, 0x6d, 0xc9, 0x3f,
+        0xbd, 0xe9, 0x00, 0x68, 0xb8, 0x2f, 0x74, 0xf6
+    ]);
+    env.mock_all_auths();
+    client.set_association_root(&admin, &association_root);
+
+    // Test withdraw with wrong proof (different state root)
     let proof = init_proof(&env);
     let pub_signals = init_erronous_pub_signals(&env);
     
@@ -349,8 +359,18 @@ fn test_deposit_and_withdraw_wrong_proof() {
 #[test]
 fn test_withdraw_insufficient_balance() {
     let env = Env::default();
-    let (_token_id, contract_id, _admin) = setup_test_environment(&env);
+    let (_token_id, contract_id, admin) = setup_test_environment(&env);
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
+
+    // Set association root to match the proof
+    let association_root = BytesN::from_array(&env, &[
+        0x0c, 0x62, 0x9c, 0xe5, 0x84, 0xbe, 0xbb, 0xc0,
+        0xd7, 0x6e, 0x7a, 0x23, 0xbc, 0x66, 0x7c, 0x57,
+        0xc7, 0xe9, 0xf2, 0xcb, 0x6f, 0x6d, 0xc9, 0x3f,
+        0xbd, 0xe9, 0x00, 0x68, 0xb8, 0x2f, 0x74, 0xf6
+    ]);
+    env.mock_all_auths();
+    client.set_association_root(&admin, &association_root);
 
     let bob = Address::generate(&env);
     let proof = init_proof(&env);
@@ -374,7 +394,7 @@ fn test_withdraw_insufficient_balance() {
 #[test]
 fn test_reuse_nullifier() {
     let env = Env::default();
-    let (token_id, contract_id, _admin) = setup_test_environment(&env);
+    let (token_id, contract_id, admin) = setup_test_environment(&env);
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
     let token_client = MockTokenClient::new(&env, &token_id);
 
@@ -394,6 +414,16 @@ fn test_reuse_nullifier() {
     ]);
     env.mock_all_auths();
     client.deposit(&alice, &commitment1);
+
+    // Set association root to match the proof
+    let association_root = BytesN::from_array(&env, &[
+        0x0c, 0x62, 0x9c, 0xe5, 0x84, 0xbe, 0xbb, 0xc0,
+        0xd7, 0x6e, 0x7a, 0x23, 0xbc, 0x66, 0x7c, 0x57,
+        0xc7, 0xe9, 0xf2, 0xcb, 0x6f, 0x6d, 0xc9, 0x3f,
+        0xbd, 0xe9, 0x00, 0x68, 0xb8, 0x2f, 0x74, 0xf6
+    ]);
+    env.mock_all_auths();
+    client.set_association_root(&admin, &association_root);
 
     // First withdraw
     let proof = init_proof(&env);
@@ -485,30 +515,27 @@ fn test_withdraw_without_association_set() {
     // Verify no association set is configured
     assert_eq!(client.has_association_set(), false);
 
-    // Test withdraw with same proof as working test, but no association set configured
-    // This tests backward compatibility - the proof has an association root but contract doesn't check it
+    // Test withdraw with no association set configured
+    // Since association root is now required, withdrawal should fail
     let proof = init_proof(&env);
-    let pub_signals = init_pub_signals(&env); // Use the same public signals as the working test
-    let pub_signals_struct = PublicSignals::from_bytes(&env, &pub_signals);
-    let nullifier = pub_signals_struct.pub_signals.get(0).unwrap().to_bytes();
+    let pub_signals = init_pub_signals(&env);
 
     let result = client.withdraw(&bob, &proof, &pub_signals);
     assert_eq!(
         result,
         vec![
             &env,
-            String::from_str(&env, ERROR_WITHDRAW_SUCCESS)
+            String::from_str(&env, "Association root must be set before withdrawal")
         ]
     );
 
-    // Check balances after withdrawal
-    assert_eq!(token_client.balance(&bob), 1000000000); // Bob should have the tokens
-    assert_eq!(token_client.balance(&contract_id), 0); // Contract should have 0 tokens
+    // Check that balances are unchanged (withdrawal failed)
+    assert_eq!(token_client.balance(&bob), 0); // Bob should still have 0
+    assert_eq!(token_client.balance(&contract_id), 1000000000); // Contract should still have tokens
 
-    // Check nullifiers
+    // Check that no nullifier was stored when withdrawal failed
     let nullifiers = client.get_nullifiers();
-    assert_eq!(nullifiers.len(), 1);
-    assert_eq!(nullifiers.get(0).unwrap(), nullifier);
+    assert_eq!(nullifiers.len(), 0);
 }
 
 #[test]
@@ -633,6 +660,66 @@ fn test_set_association_root_non_admin() {
     
     // Verify that has_association_set returns false
     assert_eq!(client.has_association_set(), false, "Should not have association set after failed non-admin call");
+}
+
+#[test]
+fn test_withdraw_requires_association_root() {
+    let env = Env::default();
+    let (token_id, contract_id, _admin) = setup_test_environment(&env);
+    
+    // Create test addresses
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    
+    let client = PrivacyPoolsContractClient::new(&env, &contract_id);
+    let token_client = MockTokenClient::new(&env, &token_id);
+    
+    // Mint tokens to alice
+    env.mock_all_auths();
+    token_client.mint(&alice, &1000000000);
+
+    // Test deposit
+    let commitment = BytesN::from_array(&env, &[
+        0x5c, 0xd2, 0x32, 0x9b, 0x7b, 0xcc, 0x98, 0x1a,
+        0xea, 0xbb, 0xe6, 0x7f, 0xd2, 0xd1, 0xca, 0x42,
+        0x5d, 0x35, 0x1f, 0xab, 0x7b, 0x17, 0x66, 0x7e,
+        0xef, 0x82, 0x93, 0x94, 0x43, 0x51, 0x05, 0x74
+    ]);
+    
+    // Mock authentication for alice
+    env.mock_all_auths();
+    client.deposit(&alice, &commitment);
+    
+    // Check balances after deposit
+    assert_eq!(token_client.balance(&alice), 0); // Alice's balance should be 0
+    assert_eq!(token_client.balance(&contract_id), 1000000000); // Contract should have the tokens
+
+    // Verify no association set is configured
+    assert_eq!(client.has_association_set(), false);
+
+    // Attempt to withdraw without setting association root - this should fail
+    let proof = init_proof(&env);
+    let pub_signals = init_pub_signals(&env);
+
+    env.mock_all_auths();
+    let result = client.withdraw(&bob, &proof, &pub_signals);
+    
+    // Verify withdrawal fails with appropriate error message
+    assert_eq!(
+        result,
+        vec![
+            &env,
+            String::from_str(&env, "Association root must be set before withdrawal")
+        ]
+    );
+
+    // Check that balances are unchanged (withdrawal failed)
+    assert_eq!(token_client.balance(&bob), 0); // Bob should still have 0
+    assert_eq!(token_client.balance(&contract_id), 1000000000); // Contract should still have tokens
+    
+    // Check that no nullifier was stored when withdrawal failed
+    let nullifiers = client.get_nullifiers();
+    assert_eq!(nullifiers.len(), 0);
 }
 
 #[cfg(feature = "test_hash")]
