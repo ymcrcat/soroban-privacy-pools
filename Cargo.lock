@@ -1290,7 +1290,6 @@ dependencies = [
  "ark-serialize",
  "hex",
  "lean-imt",
- "num-bigint",
  "poseidon",
  "soroban-sdk",
  "zk",
