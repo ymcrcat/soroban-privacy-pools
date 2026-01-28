@@ -3,16 +3,17 @@ resolver = "2"
 members = [
   "contract",
   "libs/lean-imt",
-  "libs/poseidon",
   "libs/zk",
   "cli/circom2soroban",
   "cli/coinutils",
   "circuits/test/lean-imt-test",
-  "circuits/test/poseidon-test"
+  "circuits/test/poseidon-test",
+  "circuits/test/merkle-test"
 ]
 
 [workspace.dependencies]
-soroban-sdk = "23.0.0-rc.2.2"
+soroban-sdk = { version = "25.0.0-rc.1" }
+soroban-poseidon = { version = "25.0.0-rc.1" }
 
 [profile.release]
 opt-level = "z"

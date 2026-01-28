@@ -705,7 +705,7 @@ fn test_hash_method() {
     let token_address = Address::generate(&env);
     let contract_id = env.register(PrivacyPoolsContract, (init_vk(&env), token_address));
     let client = PrivacyPoolsContractClient::new(&env, &contract_id);
-    
+
     // Should execute without panicking
     client.test_hash();
 }

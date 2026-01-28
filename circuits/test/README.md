@@ -65,7 +65,7 @@ node generate_witness.js test_merkleProof.wasm ../../test/circuit_input.json ../
 #### Step 4: Extract Witness Outputs
 ```bash
 cd ../../test
-snarkjs wtns export json test_merkleProof.wtns
+snarkjs wtns export json test_merkleProof.wtns test_merkleProof.wtns.json
 ```
 
 #### Step 5: Verify Compatibility
@@ -173,7 +173,7 @@ node ../build/test_poseidon_js/generate_witness.js ../build/test_poseidon_js/tes
 #### Step 3: Extract Witness Outputs
 ```bash
 cd ../../test
-snarkjs wtns export json test_poseidon_new.wtns
+snarkjs wtns export json test_poseidon_new.wtns test_poseidon_new.wtns.json
 ```
 
 #### Step 4: Verify Compatibility
