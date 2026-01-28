@@ -8,9 +8,6 @@ use soroban_sdk::{
     token, log,
 };
 
-#[cfg(feature = "test_hash")]
-use soroban_sdk::{U256, Symbol, Vec, crypto::bls12_381::Fr as BlsScalar};
-
 use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
 use lean_imt::{LeanIMT, TREE_ROOT_KEY, TREE_DEPTH_KEY, TREE_LEAVES_KEY};
 
@@ -381,16 +378,4 @@ impl PrivacyPoolsContract {
         env.storage().instance().get(&ADMIN_KEY).unwrap()
     }
 
-}
-
-#[cfg(feature = "test_hash")]
-#[contractimpl]
-impl PrivacyPoolsContract {
-    pub fn test_hash(env: &Env) ->  () {
-        let field = Symbol::new(&env, "BLS12_381");
-        let zero = BlsScalar::from_u256(U256::from_u32(env, 0));
-        let zero_u256 = BlsScalar::to_u256(&zero);
-        let inputs = Vec::from_array(&env, [zero_u256.clone(), zero_u256]);
-        env.crypto().poseidon_hash(field, &inputs);
-    }
 }
