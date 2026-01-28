@@ -12,7 +12,6 @@ doctest = false
 soroban-sdk = { workspace = true, features = ["alloc"] }
 zk = { path = "../libs/zk" }
 lean-imt = { path = "../libs/lean-imt" }
-poseidon = { path = "../libs/poseidon" }
 ark-ff = { version = "0.4.2", default-features = false }
 ark-bls12-381 = { version = "0.4.0", default-features = false }
 

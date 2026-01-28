@@ -1,10 +1,10 @@
 [package]
-name = "poseidon_compat_test"
+name = "merkle_compat_test"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "test_poseidon"
+name = "test_merkle"
 path = "src/main.rs"
 
 [dependencies]

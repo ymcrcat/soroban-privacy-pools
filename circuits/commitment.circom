@@ -33,20 +33,18 @@ template CommitmentHasher() {
 
     component nullifierHasher = Poseidon255(1);
     nullifierHasher.in[0] <== nullifier;
-    
+
     component precommitmentHasher = Poseidon255(2);
     precommitmentHasher.in[0] <== nullifier;
     precommitmentHasher.in[1] <== secret;
 
-    // Match Rust poseidon_hash for >2 inputs: hash sequentially with Poseidon(2)
-    component hashValueLabel = Poseidon255(2);
-    hashValueLabel.in[0] <== value;
-    hashValueLabel.in[1] <== label;
+    // Commitment = Poseidon(value, label, precommitment) with t=4 (3 inputs)
+    // This matches the Rust implementation: poseidon_hash(env, &[value, label, precommitment])
+    component commitmentHasher = Poseidon255(3);
+    commitmentHasher.in[0] <== value;
+    commitmentHasher.in[1] <== label;
+    commitmentHasher.in[2] <== precommitmentHasher.out;
 
-    component commitmentHasherSeq = Poseidon255(2);
-    commitmentHasherSeq.in[0] <== hashValueLabel.out;
-    commitmentHasherSeq.in[1] <== precommitmentHasher.out;
-
-    commitment <== commitmentHasherSeq.out;
+    commitment <== commitmentHasher.out;
     nullifierHash <== nullifierHasher.out;
 }

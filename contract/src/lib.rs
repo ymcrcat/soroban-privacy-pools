@@ -9,12 +9,10 @@ use soroban_sdk::{
 };
 
 #[cfg(feature = "test_hash")]
-use soroban_sdk::{U256, crypto::bls12_381::Fr as BlsScalar};
+use soroban_sdk::{U256, Symbol, Vec, crypto::bls12_381::Fr as BlsScalar};
 
 use zk::{Groth16Verifier, VerificationKey, Proof, PublicSignals};
 use lean_imt::{LeanIMT, TREE_ROOT_KEY, TREE_DEPTH_KEY, TREE_LEAVES_KEY};
-#[cfg(feature = "test_hash")]
-use poseidon::Poseidon255;
 
 #[cfg(test)]
 mod test;
@@ -42,7 +40,7 @@ pub const ERROR_WITHDRAW_SUCCESS: &str = "Withdrawal successful";
 pub const ERROR_ONLY_ADMIN: &str = "Only the admin can set association root";
 pub const SUCCESS_ASSOCIATION_ROOT_SET: &str = "Association root set successfully";
 
-const TREE_DEPTH: u32 = 2;
+const TREE_DEPTH: u32 = 20;
 
 // Storage keys
 const NULL_KEY: Symbol = symbol_short!("null");
@@ -389,8 +387,10 @@ impl PrivacyPoolsContract {
 #[contractimpl]
 impl PrivacyPoolsContract {
     pub fn test_hash(env: &Env) ->  () {
-        let poseidon = Poseidon255::new_with_t(env, 3);
+        let field = Symbol::new(&env, "BLS12_381");
         let zero = BlsScalar::from_u256(U256::from_u32(env, 0));
-        poseidon.hash_two(&zero, &zero);
+        let zero_u256 = BlsScalar::to_u256(&zero);
+        let inputs = Vec::from_array(&env, [zero_u256.clone(), zero_u256]);
+        env.crypto().poseidon_hash(field, &inputs);
     }
 }
