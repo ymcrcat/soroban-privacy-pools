@@ -1,9 +1,9 @@
 #![no_std]
 
 use soroban_sdk::{
-    contracterror,
-    crypto::bls12_381::{Fr, G1Affine, G2Affine, G1_SERIALIZED_SIZE, G2_SERIALIZED_SIZE},
-    vec, Env, Vec, Bytes, U256,
+    Bytes, Env, U256, Vec, contracterror,
+    crypto::bls12_381::{Fr, G1_SERIALIZED_SIZE, G1Affine, G2_SERIALIZED_SIZE, G2Affine},
+    vec,
 };
 
 #[contracterror]
@@ -50,7 +50,7 @@ impl VerificationKey {
             *pos += N;
             arr
         }
-        
+
         // Deserialize fields
         let alpha = G1Affine::from_array(env, &take::<G1_SERIALIZED_SIZE>(bytes, &mut pos));
         let beta = G2Affine::from_array(env, &take::<G2_SERIALIZED_SIZE>(bytes, &mut pos));
@@ -64,7 +64,13 @@ impl VerificationKey {
             let g1 = G1Affine::from_array(env, &take::<G1_SERIALIZED_SIZE>(bytes, &mut pos));
             ic.push_back(g1);
         }
-        Ok(VerificationKey { alpha, beta, gamma, delta, ic })
+        Ok(VerificationKey {
+            alpha,
+            beta,
+            gamma,
+            delta,
+            ic,
+        })
     }
 }
 
@@ -143,7 +149,6 @@ impl PublicSignals {
         PublicSignals { pub_signals }
     }
 }
-
 
 pub struct Groth16Verifier;
 
