@@ -7,8 +7,7 @@ members = [
   "cli/circom2soroban",
   "cli/coinutils",
   "circuits/test/lean-imt-test",
-  "circuits/test/poseidon-test",
-  "circuits/test/merkle-test"
+  "circuits/test/poseidon-test"
 ]
 
 [workspace.dependencies]

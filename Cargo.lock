@@ -1117,18 +1117,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "merkle_compat_test"
-version = "0.1.0"
-dependencies = [
- "num-bigint",
- "num-traits",
- "serde",
- "serde_json",
- "soroban-poseidon",
- "soroban-sdk",
-]
-
-[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
