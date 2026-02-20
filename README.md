@@ -6,8 +6,6 @@ This project is currently a work in progress and is a merely a prototype for res
 
 A privacy-preserving transaction system built on Stellar using Soroban smart contracts and zero-knowledge proofs (zkSNARKs). This project implements privacy pools that allow users to deposit and withdraw tokens while maintaining transaction privacy through cryptographic commitments and Merkle tree inclusion proofs. It includes the incorporation of Association Set Providers (ASPs) that define inclusion criteria intended to help mitigate illicit use. ASPs enable participants to selectively associate with sets of other participants who meet their chosen compliance standards
 
-> **Note**: The commitments Merkle-tree is very small in the current version of the code. It will be possible to increase the depth of the commitments tree once Poseidon hashing is added as a host function (CAP-75)[https://github.com/stellar/stellar-protocol/blob/master/core/cap-0075.md], more hashing operations to fit within a function's budget.
-
 ## Features
 
 - **Privacy-preserving transactions**: Deposit and withdraw tokens without revealing transaction history
